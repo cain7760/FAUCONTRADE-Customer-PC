@@ -95,7 +95,7 @@ const assetsVisible = ref(true), assetsCollapsed = ref(false)
 const tab = ref('positions'), selectedCode = ref('000001'), table = ref(null), quote = ref(null), ticketResetKey = ref(0)
 const ticketContext = ref(null)
 const closePositionVisible = ref(false), closingPosition = ref(null)
-const chaseOrderVisible = ref(false), chasingPosition = ref(null), chasingAccountId = ref(null)
+const chaseOrderVisible = ref(false), chasingPosition = ref(null), chasingOrder = ref(null), chasingAccountId = ref(null)
 const amendOrderVisible = ref(false), amendingOrder = ref(null)
 const cancelOrderVisible = ref(false), cancelingOrder = ref(null)
 const convertManualVisible = ref(false), convertingManualOrder = ref(null)
@@ -113,7 +113,8 @@ const demoOrders = ref(demoOrderStatuses.map((status, index) => {
   const filledQuantity = status === '完成' ? quantity : status === '部成' ? Math.max(100, Math.floor(quantity / 2 / 100) * 100) : 0
   const price = index % 3 === 1 ? null : instrument.price
   const estimate = (price || instrument.price) * quantity
-  const executionType = status === '拒绝' || (status === '异常' && index !== orderStatusMachine.indexOf('异常')) || index % 4 === 3 ? 'highTouch' : 'lowTouch'
+  // 保留一条异常系统单供“转手工单”操作，后续异常样本仍为手工单以覆盖无转换入口的场景。
+  const executionType = status === '拒绝' || (status === '异常' && index !== orderStatusMachine.indexOf('异常')) || (status !== '异常' && index % 4 === 3) ? 'highTouch' : 'lowTouch'
   return {
     id: `seed-${index + 1}`, orderNo: `WT20260911${String(index + 1).padStart(3, '0')}`,
     account: index < orderStatusMachine.length || index % 3 !== 1 ? 'TZS_T0' : 'TZS_T1', code: instrument.code, name: instrument.name, executionType, type: price === null ? 'market' : 'limit',
@@ -538,8 +539,9 @@ function loadPositionIntoTicket(row) {
 function openClosePosition(row) { if (!systemRunning.value) return; closingPosition.value = row; closePositionVisible.value = true }
 function openChaseOrder(row) {
   if (!systemRunning.value) return
-  const position = variantRows.find(item => item.code === row.code)
+  const position = allPositionRows.value.find(item => item.code === row.code && item.account === row.account) || variantRows.find(item => item.code === row.code)
   chasingPosition.value = position ? { ...position, account: row.account } : row
+  chasingOrder.value = row.orderNo ? { ...row } : null
   chasingAccountId.value = row.account
   chaseOrderVisible.value = true
 }
@@ -557,13 +559,19 @@ function acceptChaseOrder(order) {
 function openOrderHistory(row) { historyRecord.value = row; historyVisible.value = true }
 function cancelableQuantity(row) { return Math.max(0, row.quantity - (row.filledQuantity || 0)) }
 function canOperateOrder(row) { return systemRunning.value && cancelableQuantity(row) > 0 && ['待报', '已报', '部成'].includes(row.status) }
+const terminalOrderStatuses = new Set(['已撤', '完成', '异常', '拒绝', '其他'])
+function isTerminalOrder(row) { return terminalOrderStatuses.has(row.status) }
+function canChaseOrder(row) { return systemRunning.value && (isTerminalOrder(row) || canOperateOrder(row)) }
+function canAmendOrder(row) { return !isTerminalOrder(row) && canOperateOrder(row) }
 function canConvertToManual(row) { return systemRunning.value && row.status === '异常' && row.orderType === '系统单' }
 function orderActionLabel(row, action) {
   if (!systemRunning.value) return '系统已暂停交易'
+  if (action === '追加订单' && isTerminalOrder(row)) return '基于原订单信息再次下单'
+  if (isTerminalOrder(row)) return `订单当前为${row.status}，终态订单不可${action}`
   if (!['待报', '已报', '部成'].includes(row.status)) return `订单当前为${row.status}，不可${action}`
   return cancelableQuantity(row) > 0 ? action : '订单无可操作数量'
 }
-function openOrderChase(row) { if (canOperateOrder(row)) openChaseOrder(row) }
+function openOrderChase(row) { if (canChaseOrder(row)) openChaseOrder(row) }
 function openCancelOrder(row) { if (canOperateOrder(row)) { cancelingOrder.value = row; cancelOrderVisible.value = true } }
 function openConvertToManual(row) {
   if (!canConvertToManual(row)) return
@@ -589,7 +597,7 @@ function confirmConvertToManual() {
   convertingManualOrder.value = null
 }
 function openAmendOrder(row) {
-  if (!canOperateOrder(row)) return
+  if (!canAmendOrder(row)) return
   amendingOrder.value = row
   amendOrderVisible.value = true
 }
@@ -740,7 +748,7 @@ onBeforeUnmount(() => {
               <el-table-column v-else-if="columnKey === 'traderRemark'" prop="traderRemark" label="交易员备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.traderRemark || '--' }}</template></el-table-column>
             </template>
             <el-table-column label="历史" width="52" align="center" header-align="center" class-name="history-column" label-class-name="history-column"><template #default="{ row }"><button type="button" class="history-view" @click.stop="openOrderHistory(row)">查看</button></template></el-table-column>
-            <el-table-column label="操作" width="72" fixed="right" align="center" header-align="center" class-name="operation-column" label-class-name="operation-column"><template #default="{ row }"><div v-if="row.direction === '多'" class="row-actions"><button type="button" :disabled="!systemRunning" @click.stop="openChaseOrder(row)">追</button><button type="button" :disabled="!systemRunning" @click.stop="openClosePosition(row)">平</button></div></template></el-table-column>
+            <el-table-column label="操作" width="72" fixed="right" align="center" header-align="center" class-name="operation-column" label-class-name="operation-column"><template #default="{ row }"><div v-if="row.direction === '多'" class="row-actions"><el-tooltip content="追加订单" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="position-chase-action" aria-label="追加订单" :disabled="!systemRunning" @click.stop="openChaseOrder(row)">追</button></span></el-tooltip><el-tooltip content="平仓" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="position-close-action" aria-label="平仓" :disabled="!systemRunning" @click.stop="openClosePosition(row)">平</button></span></el-tooltip></div></template></el-table-column>
             <el-table-column width="22" fixed="right" align="center" header-align="center" class-name="column-config-column" label-class-name="column-config-column"><template #header><ColumnConfigPopover v-model="visibleColumnKeys" :options="columnOptions" :defaults="positionColumnDefaults" /></template></el-table-column>
           </TradingTable><footer class="positions-footer"><span>显示 {{ filtered.length }} / {{ allRows.length }} 条</span></footer>
         </template>
@@ -785,7 +793,7 @@ onBeforeUnmount(() => {
               <el-table-column v-else-if="columnKey === 'traderRemark'" prop="traderRemark" label="交易员备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.traderRemark || '--' }}</template></el-table-column>
             </template>
             <el-table-column label="历史" width="52" align="center" header-align="center" class-name="history-column" label-class-name="history-column"><template #default="{row}"><button type="button" class="history-view" @click.stop="openOrderHistory(row)">查看</button></template></el-table-column>
-            <el-table-column label="操作" width="88" fixed="right" align="center" class-name="operation-column" label-class-name="operation-column"><template #default="{row}"><div class="order-row-actions"><button v-if="canConvertToManual(row)" type="button" class="order-convert-manual" title="将异常系统单转为手工单" aria-label="将异常系统单转为手工单" @click="openConvertToManual(row)">转手工单</button><template v-else><button type="button" :title="orderActionLabel(row, '追单')" :aria-label="orderActionLabel(row, '追单')" :disabled="!canOperateOrder(row)" @click="openOrderChase(row)">追</button><button type="button" :title="orderActionLabel(row, '改单')" :aria-label="orderActionLabel(row, '改单')" :disabled="!canOperateOrder(row)" @click="openAmendOrder(row)">改</button><button type="button" :title="orderActionLabel(row, '撤单')" :aria-label="orderActionLabel(row, '撤单')" :disabled="!canOperateOrder(row)" @click="openCancelOrder(row)">撤</button></template></div></template></el-table-column>
+            <el-table-column label="操作" width="96" fixed="right" align="center" class-name="operation-column" label-class-name="operation-column"><template #default="{row}"><div class="order-row-actions"><el-tooltip v-if="canConvertToManual(row)" content="转手工单" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-convert-manual" aria-label="转手工单" @click="openConvertToManual(row)">转</button></span></el-tooltip><el-tooltip :content="orderActionLabel(row, '追加订单')" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-chase-action" :aria-label="orderActionLabel(row, '追加订单')" :disabled="!canChaseOrder(row)" @click="openOrderChase(row)">追</button></span></el-tooltip><template v-if="!canConvertToManual(row)"><el-tooltip :content="orderActionLabel(row, '修改订单')" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-amend-action" :aria-label="orderActionLabel(row, '修改订单')" :disabled="!canAmendOrder(row)" @click="openAmendOrder(row)">改</button></span></el-tooltip><el-tooltip :content="orderActionLabel(row, '撤单')" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-cancel-action" :aria-label="orderActionLabel(row, '撤单')" :disabled="!canOperateOrder(row)" @click="openCancelOrder(row)">撤</button></span></el-tooltip></template></div></template></el-table-column>
             <el-table-column width="22" fixed="right" align="center" header-align="center" class-name="column-config-column" label-class-name="column-config-column"><template #header><ColumnConfigPopover v-model="orderVisibleColumnKeys" :options="orderColumnOptions" :defaults="orderColumnDefaults" /></template></el-table-column>
           </TradingTable>
         </template>
@@ -839,7 +847,7 @@ onBeforeUnmount(() => {
     </div>
     <footer class="variant-status"><span class="system-status"><i class="status-dot" :class="{ 'is-interrupted': !systemRunning }"/>{{ systemRunning ? '运行中' : '系统中断' }} · 演示环境<button type="button" class="system-status-toggle" @click="toggleSystemStatus">{{ systemRunning ? '切换为中断' : '恢复运行' }}</button></span><span>行情：静态快照</span><span class="status-end">系统版本：方案 V0.2</span></footer>
     <ClosePositionDialog v-model="closePositionVisible" :position="closingPosition" :account="account" @submit="acceptClosePosition" />
-    <ChaseOrderDialog v-model="chaseOrderVisible" :position="chasingPosition" :account="chasingAccount" @submit="acceptChaseOrder" />
+    <ChaseOrderDialog v-model="chaseOrderVisible" :position="chasingPosition" :order="chasingOrder" :account="chasingAccount" @submit="acceptChaseOrder" />
     <AmendOrderDialog v-model="amendOrderVisible" :order="amendingOrder" :symbol="amendingSymbol" :account="amendingAccount" @submit="acceptAmendOrder" />
     <OrderHistoryDialog v-model="historyVisible" :record="historyRecord" />
     <BaseDialog v-model="exportDialogVisible" width="400px" class="variant-confirm export-time-dialog" title="导出数据" :close-on-press-escape="false">
@@ -851,16 +859,26 @@ onBeforeUnmount(() => {
       </section>
       <template #footer><el-button @click="exportDialogVisible=false">取消[Esc]</el-button><el-button type="primary" @click="confirmExport">导出[Enter]</el-button></template>
     </BaseDialog>
-    <BaseDialog v-model="convertManualVisible" width="400px" class="variant-confirm convert-manual-dialog" title="转为手工单" :close-on-press-escape="false">
+    <BaseDialog v-model="convertManualVisible" width="680px" align-center append-to-body class="variant-confirm convert-manual-dialog" title="转为手工单" :close-on-press-escape="false">
       <template v-if="convertingManualOrder">
-        <p class="convert-manual-intro">该操作仅变更订单类型，订单编号、价格、数量及异常状态将保持不变。</p>
-        <dl class="convert-manual-details" aria-label="待转换订单信息">
-          <div><dt>订单编号</dt><dd>{{ convertingManualOrder.orderNo }}</dd></div>
-          <div><dt>下单账户</dt><dd>{{ accountLabel(convertingManualOrder.account) }}</dd></div>
-          <div><dt>标的</dt><dd>{{ convertingManualOrder.name }}（{{ convertingManualOrder.code }}）</dd></div>
-          <div><dt>异常原因</dt><dd>{{ convertingManualOrder.feedback || '系统处理异常' }}</dd></div>
-        </dl>
-        <label class="convert-manual-remark" for="convert-manual-remark">下单备注<el-input id="convert-manual-remark" v-model="conversionRemark" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入备注，供交易员处理时参考" /></label>
+        <p class="convert-manual-intro">转为手工单后，将由交易员直接接入审核；订单编号、价格、数量及异常状态保持不变。</p>
+        <el-descriptions class="convert-manual-details" :column="2" border size="small" aria-label="待转换订单信息">
+          <el-descriptions-item label="订单编号">{{ convertingManualOrder.orderNo }}</el-descriptions-item>
+          <el-descriptions-item label="下单账户">{{ accountLabel(convertingManualOrder.account) }}</el-descriptions-item>
+          <el-descriptions-item label="标的">{{ convertingManualOrder.name }}（{{ convertingManualOrder.code }}.{{ convertingManualOrder.market }}）</el-descriptions-item>
+          <el-descriptions-item label="市场">{{ marketLabel(convertingManualOrder.market) }}</el-descriptions-item>
+          <el-descriptions-item label="交易方向"><span :class="convertingManualOrder.side === 'buy' ? 'is-buy' : 'is-sell'">{{ convertingManualOrder.side === 'buy' ? '买入' : '卖出' }}</span> · {{ convertingManualOrder.openClose === '开' ? '开仓' : '平仓' }}</el-descriptions-item>
+          <el-descriptions-item label="原订单类型">{{ convertingManualOrder.orderType }} · {{ convertingManualOrder.attribute || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="执行算法">{{ convertingManualOrder.algorithm || '--' }}</el-descriptions-item>
+          <el-descriptions-item label="订单价格">{{ convertingManualOrder.price === null ? '市价' : formatPrice(convertingManualOrder.price, convertingManualOrder.market) }}</el-descriptions-item>
+          <el-descriptions-item label="订单数量">{{ number(convertingManualOrder.quantity) }} 股</el-descriptions-item>
+          <el-descriptions-item label="订单金额">{{ money(convertingManualOrder.estimate) }} CNY</el-descriptions-item>
+          <el-descriptions-item label="订单状态">{{ convertingManualOrder.status }}</el-descriptions-item>
+          <el-descriptions-item label="下单时间">{{ convertingManualOrder.orderTime }}</el-descriptions-item>
+          <el-descriptions-item label="异常原因" :span="2">{{ convertingManualOrder.feedback || '系统处理异常' }}</el-descriptions-item>
+          <el-descriptions-item label="原下单备注" :span="2">{{ convertingManualOrder.orderRemark || '--' }}</el-descriptions-item>
+        </el-descriptions>
+        <label class="convert-manual-remark" for="convert-manual-remark">手工单备注<el-input id="convert-manual-remark" v-model="conversionRemark" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入备注，供交易员处理时参考" /></label>
       </template>
       <template #footer><el-button @click="convertManualVisible=false; conversionRemark=''">取消[Esc]</el-button><el-button type="primary" @click="confirmConvertToManual">确认转换[Enter]</el-button></template>
     </BaseDialog>
