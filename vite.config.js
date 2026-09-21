@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   build: {
     rollupOptions: {
-      input: { main: 'index.html', equityDraft: 'equity-draft.html', equityVariants: 'equity-variants.html' },
+      input: { main: 'index.html', equityVariants: 'equity-variants.html' },
     },
   },
 })
