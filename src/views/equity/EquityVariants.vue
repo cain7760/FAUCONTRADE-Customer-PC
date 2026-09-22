@@ -22,7 +22,7 @@ import TradingTable from './components/TradingTable.vue'
 import TrsMyHtOrders from './components/TrsMyHtOrders.vue'
 import TrsOrderPool from './components/TrsOrderPool.vue'
 import TrsQuickOrderWorkspace from './components/TrsQuickOrderWorkspace.vue'
-import { addManualEquityOrderToHt } from './trsOrderStore'
+import { addManualEquityOrderToPool } from './trsOrderStore'
 
 const initialVariant = new URLSearchParams(location.search).get('layout')
 const assetUrl = name => `${import.meta.env.BASE_URL}original-icons/${name}`
@@ -579,7 +579,7 @@ function assetAmountParts(value) {
 function acceptOrder(order, { skipHtSync = false } = {}) {
   if (!systemRunning.value) return
   demoOrders.value.unshift(enrichOrder(order))
-  if (!skipHtSync) addManualEquityOrderToHt(order)
+  if (!skipHtSync) addManualEquityOrderToPool(order)
   tab.value = 'orders'
   publishTransactionMessage({ name: order.name, code: order.code, status: '订单已提交', quantity: order.quantity, quantityLabel: '订单数量', title: '订单提交成功' })
 }

@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { positions } from './fixtures'
+import { accounts, positions } from './fixtures'
 
 export const poolOrders = ref([
   { id: 'pool-001', customer: 'Kevin_292933', customerCode: 'CUS-001024', account: 'TRS_T0 - 自营一号', tradeType: '新单', standard: '标准', underlying: '平安银行', direction: '买入', attribute: '开仓', price: '11.78', quantity: '1,000 万', amount: '10,000,000.00 CNY', submittedAt: '2026-09-22 09:36:12', orderNo: 'HT202609220001', status: 'pending', riskTag: 'approved' },
@@ -18,7 +18,6 @@ export const poolOrders = ref([
 ])
 
 export const claimedHtOrders = ref([])
-export const equityManualHtOrders = ref([])
 export const traderHtOrders = ref(poolOrders.value.filter(order => order.status !== 'pending').map(order => ({ ...order, id: `trader-${order.id}` })))
 
 poolOrders.value = poolOrders.value.filter(order => order.status === 'pending')
@@ -35,39 +34,38 @@ function formatQuantity(value) {
 
 // The equity workspace has no separate client selector, so manual orders are attributed
 // to the signed-in demo client until a customer identity is supplied by the order API.
-export function addManualEquityOrderToHt(order) {
+export function addManualEquityOrderToPool(order) {
   if (order?.executionType !== 'highTouch') return
   const isAmountOrder = order.inputAmount !== null && order.inputAmount !== undefined
   const quantity = Number(order.quantity || 0)
   const amount = Number(isAmountOrder ? order.inputAmount : order.estimate || 0)
   const position = positions.find(item => item.code === order.code)
+  const account = accounts.find(item => item.id === order.account)
   const submittedAt = new Date().toLocaleString('sv-SE', { hour12: false }).replace('T', ' ')
 
-  equityManualHtOrders.value.unshift({
+  const poolOrder = {
     id: `equity-manual-${order.id}`,
     sourceOrderId: order.id,
-    sourceOrderNo: order.orderNo,
     customer: 'Kevin_292933',
     customerCode: 'CUS-001024',
-    account: order.account || 'TZS_T0',
+    account: account ? `${account.id} - ${account.name}` : (order.account || '--'),
+    tradeType: '新单',
     underlying: order.name,
     code: `${order.code}.${position?.market || 'SZ'}`,
     standard: position ? '标准' : '非标',
-    status: 'orderPending',
+    status: 'pending',
     direction: order.side === 'sell' ? '卖出' : '买入',
     attribute: order.openClose === '平' ? '平仓' : '开仓',
     price: order.type === 'market' ? '--' : Number(order.price || 0).toFixed(2),
     quantity: formatQuantity(quantity),
-    quantityValue: quantity,
     amount: formatAmount(amount),
-    amountValue: amount,
-    orderValueMode: isAmountOrder ? 'amount' : 'quantity',
-    orderNo: `HT-${order.orderNo}`,
+    orderNo: order.orderNo,
     submittedAt,
     remark: order.note || `来自权益交易手工单 ${order.orderNo}。`,
-    assets: '128,560,000.00 CNY',
-    available: '46,250,000.00 CNY',
-  })
+  }
+  const existingIndex = poolOrders.value.findIndex(item => item.sourceOrderId === order.id)
+  if (existingIndex >= 0) poolOrders.value.splice(existingIndex, 1, poolOrder)
+  else poolOrders.value.unshift(poolOrder)
 }
 
 export function movePoolOrdersToTrader(ids, details = {}) {

@@ -8,7 +8,7 @@ import ColumnConfigPopover from './ColumnConfigPopover.vue'
 import OrderHistoryDialog from './OrderHistoryDialog.vue'
 import TradingTable from './TradingTable.vue'
 import { positions } from '../fixtures'
-import { claimedHtOrders, equityManualHtOrders } from '../trsOrderStore'
+import { claimedHtOrders } from '../trsOrderStore'
 
 const emit = defineEmits(['back-to-pool', 'place-order', 'deal-recorded'])
 const props = defineProps({ placedTrsOrder: Object })
@@ -189,7 +189,7 @@ const statusSelectionIndeterminate = computed(() => statusFilter.value.length > 
 function toggleAllStatuses() {
   statusFilter.value = allStatusesSelected.value ? [] : [...statusValues]
 }
-const allOrders = computed(() => [...equityManualHtOrders.value, ...orders.value, ...claimedHtOrders.value])
+const allOrders = computed(() => [...orders.value, ...claimedHtOrders.value])
 const todoOrders = computed(() => allOrders.value.filter(order => !doneStatusValues.includes(order.status)))
 const doneOrders = computed(() => allOrders.value.filter(order => doneStatusValues.includes(order.status)))
 const filteredDoneOrders = computed(() => doneOrders.value.filter(order => {
