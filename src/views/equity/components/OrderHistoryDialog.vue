@@ -41,9 +41,19 @@ function statusRecord(row, time) {
   const [operator, type, content] = rules[row.status] || rules.其他
   return { operator, time, type, content }
 }
+function historyOperator(label) {
+  if (String(label).includes('客户')) return '客户'
+  if (String(label).includes('审批')) return '审批人'
+  return '交易员'
+}
 const records = computed(() => {
   const row = props.record
   if (!row) return []
+  if (Array.isArray(row.history) && row.history.length) {
+    return row.history
+      .map(item => ({ operator: historyOperator(item.label), time: item.at || recordTime.value, type: item.label || '状态更新', content: item.detail || '订单状态已更新。' }))
+      .sort((a, b) => b.time.localeCompare(a.time))
+  }
   const entries = [{ operator: '当前账户', time: recordTime.value, type: '下单', content: `提交${directionLabel.value}${openCloseLabel.value}${row.type === 'market' ? '市价' : '限价'}订单：${orderQuantity.value}。` }]
   let offset = 45
   if (row.orderType === '手工单') {

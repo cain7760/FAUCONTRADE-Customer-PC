@@ -2,7 +2,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 64px 224px minmax(0, 1fr);
+  grid-template-columns: 64px 180px minmax(0, 1fr);
   background: #111315;
 }
 
@@ -45,7 +45,7 @@
 }
 
 .trader-primary-nav button.active {
-  border-color: #665638;
+  border-color: transparent;
   background: #302c24;
   color: #bb984a;
 }
@@ -60,29 +60,54 @@
   content: '';
 }
 
+.trader-primary-nav .trader-primary-expand {
+  display: grid;
+  align-self: center;
+  place-items: center;
+  width: 28px;
+  min-height: 28px;
+  height: 28px;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  color: #969eaa;
+}
+
+.trader-primary-nav .trader-primary-expand .el-icon {
+  font-size: 18px;
+}
+
+.trader-primary-nav .trader-primary-expand:hover {
+  background: #2c3036;
+  color: #bb984a;
+}
+
 .trader-secondary-nav {
   min-width: 0;
   border-right: 1px solid #303338;
-  background: #1e2023;
+  background: #181a1f;
 }
 
 .trader-secondary-nav > header {
   display: flex;
   align-items: center;
-  height: 58px;
+  height: 42px;
   justify-content: space-between;
   padding: 0 12px 0 16px;
   border-bottom: 1px solid #303338;
   color: #e8eaed;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
 }
 
-.trader-secondary-collapse {
+.trader-secondary-nav .trader-secondary-collapse {
   display: grid;
+  flex: 0 0 28px;
   place-items: center;
   width: 28px;
+  min-width: 28px;
   height: 28px;
+  min-height: 28px;
   padding: 0;
   border: 0;
   border-radius: 3px;
@@ -91,7 +116,7 @@
   cursor: pointer;
 }
 
-.trader-secondary-collapse:hover {
+.trader-secondary-nav .trader-secondary-collapse:hover {
   background: #2c3036;
   color: #bb984a;
 }
@@ -105,9 +130,11 @@
 
 .trader-secondary-nav button {
   display: flex;
+  position: relative;
   align-items: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: 36px;
+  height: 36px;
   padding: 0 14px;
   border: 0;
   border-radius: 4px;
@@ -123,38 +150,27 @@
   font-size: 16px;
 }
 
+.trader-secondary-nav .trader-secondary-collapse .el-icon {
+  flex: none;
+  font-size: 16px;
+}
+
 .trader-secondary-nav button:hover {
   background: #2c3036;
-  color: #bb984a;
+  color: #e8eaed;
 }
 
 .trader-secondary-nav button.active {
-  background: transparent;
+  background: #302c24;
   color: #bb984a;
   font-weight: 600;
 }
 
-.trader-secondary-nav button.active::before {
-  width: 3px;
-  height: 20px;
-  margin-left: -14px;
-  margin-right: 11px;
-  border-radius: 2px;
-  background: #bb984a;
-  content: '';
-}
-
 .trader-center-layout.is-secondary-collapsed {
-  grid-template-columns: 64px 42px minmax(0, 1fr);
+  grid-template-columns: 64px minmax(0, 1fr);
 }
 
-.trader-center-layout.is-secondary-collapsed .trader-secondary-nav > header {
-  justify-content: center;
-  padding: 0;
-}
-
-.trader-center-layout.is-secondary-collapsed .trader-secondary-nav > header > span,
-.trader-center-layout.is-secondary-collapsed .trader-secondary-nav nav {
+.trader-center-layout.is-secondary-collapsed .trader-secondary-nav {
   display: none;
 }
 

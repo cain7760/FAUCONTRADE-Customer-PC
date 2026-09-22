@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDownBold, ArrowLeft, ArrowRight, Bell, Briefcase, CaretBottom, ChatDotRound, Clock, Collection, Connection, Document, Search, Setting, InfoFilled, View, Hide, CircleCheck, CircleClose, Close, EditPen, List, More, Tickets } from '@element-plus/icons-vue'
+import { ArrowDownBold, Bell, Briefcase, CaretBottom, ChatDotRound, Clock, Collection, Connection, Document, Expand, Fold, Search, Setting, InfoFilled, View, Hide, CircleCheck, CircleClose, Close, EditPen, List, More, Tickets } from '@element-plus/icons-vue'
 import ClientLineIcon from '../../ClientLineIcon.vue'
 import SettingsMenuIcon from '../../SettingsMenuIcon.vue'
 import { accounts } from './fixtures'
@@ -19,6 +19,10 @@ import OrderHistoryDialog from './components/OrderHistoryDialog.vue'
 import SortHeader from './components/SortHeader.vue'
 import ColumnConfigPopover from './components/ColumnConfigPopover.vue'
 import TradingTable from './components/TradingTable.vue'
+import TrsMyHtOrders from './components/TrsMyHtOrders.vue'
+import TrsOrderPool from './components/TrsOrderPool.vue'
+import TrsQuickOrderWorkspace from './components/TrsQuickOrderWorkspace.vue'
+import { addManualEquityOrderToHt } from './trsOrderStore'
 
 const initialVariant = new URLSearchParams(location.search).get('layout')
 const assetUrl = name => `${import.meta.env.BASE_URL}original-icons/${name}`
@@ -90,11 +94,11 @@ const overflowNav = computed(() => viewportWidth.value <= 980 ? availableNav.val
 const visibleNav = computed(() => availableNav.value.slice(0, availableNav.value.length - overflowNav.value.length))
 const isUnderDevelopment = computed(() => ['期权交易', '融资申请', '数据'].includes(activeNav.value))
 const traderPrimaryMenu = [
-  { key: 'options', label: '期权', title: '期权交易', icon: List, children: [{ label: '期权交易', icon: Tickets }, { label: '期权簿记', icon: Collection }, { label: '持仓管理', icon: Briefcase }, { label: '生命周期', icon: Clock }] },
   { key: 'swap', label: 'TRS', title: '收益互换', icon: Connection, children: [{ label: '订单管理', icon: Document }, { label: '我的HT订单', icon: Collection }] },
+  { key: 'options', label: '期权', title: '期权交易', icon: List, children: [{ label: '期权交易', icon: Tickets }, { label: '持仓管理', icon: Briefcase }, { label: '生命周期', icon: Clock }] },
 ]
-const activeTraderPrimary = ref('options')
-const activeTraderSecondary = ref('期权交易')
+const activeTraderPrimary = ref('swap')
+const activeTraderSecondary = ref('订单管理')
 const traderSecondaryCollapsed = ref(false)
 const activeTraderGroup = computed(() => traderPrimaryMenu.find(item => item.key === activeTraderPrimary.value) || traderPrimaryMenu[0])
 function selectTraderPrimary(key) {
@@ -102,6 +106,13 @@ function selectTraderPrimary(key) {
   if (!group) return
   activeTraderPrimary.value = key
   activeTraderSecondary.value = group.children[0].label
+}
+function selectProductNav(label) {
+  activeNav.value = label
+  if (label === '交易员中心') {
+    activeTraderPrimary.value = 'swap'
+    activeTraderSecondary.value = '订单管理'
+  }
 }
 const allAccountsValue = '__ALL_ACCOUNTS__'
 const workspace = ref(null), accountId = ref('TZS_T0'), selectedAccountIds = ref(['TZS_T0']), previousAccountSelection = ref(['TZS_T0']), query = ref(''), market = ref('ALL'), positionType = ref('ALL')
@@ -119,6 +130,10 @@ const historyVisible = ref(false), historyRecord = ref(null)
 const exportDialogVisible = ref(false)
 const exportTarget = ref('positions')
 const exportDateRange = ref([])
+const trsPoolExportRows = ref([])
+const trsOrderTicketVisible = ref(false)
+const trsOrderRequest = ref(null)
+const placedTrsOrder = ref(null)
 const orderStatusMachine = ['已撤', '暂停', '完成', '部成', '已报', '待报', '改单中', '异常', '拒绝', '其他']
 const orderStatusOptions = orderStatusMachine.map(status => ({ label: status, value: status }))
 const demoOrderStatuses = [...orderStatusMachine, '暂停', '已报', '待报', '完成', '异常', '其他']
@@ -147,6 +162,7 @@ const demoOrders = ref(demoOrderStatuses.map((status, index) => {
     market: instrument.market, orderTime: `2026-09-11 09:${String(30 + index).padStart(2, '0')}:00`,
   }
 }))
+const syncedHtPositions = ref([])
 const positionOrderType = ref('ALL')
 const orderFilters = ref({ orderNo: '', symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL', status: [] })
 const appliedPositionFilters = ref({ query: '', market: 'ALL', positionType: 'ALL', orderType: 'ALL' })
@@ -184,7 +200,16 @@ const filteredGlobalAccounts = computed(() => {
 const instruments = computed(() => variantRows.map(p => accountId.value === 'TZS_T0' ? p : { ...p, id: p.id.replace('T0','T1'), qty: p.qty*2, available: p.available*2, value: p.value*2, account:'TZS_T1' }))
 const emptySelected = { code: '', market: '', name: '请选择下单标的', price: null, cost: null, change: 0, available: 0 }
 const selected = computed(() => instruments.value.find(p => p.code === selectedCode.value) || marketInstruments.find(p => p.code === selectedCode.value) || emptySelected)
-const allPositionRows = computed(() => [...variantRows, ...variantRows.map(p => ({ ...p, id: p.id.replace('T0', 'T1'), qty: p.qty * 2, available: p.available * 2, value: p.value * 2, account: 'TZS_T1' }))])
+const trsTicketSymbol = computed(() => trsOrderRequest.value?.symbol || selected.value)
+const trsTicketInstruments = computed(() => {
+  const requestSymbol = trsOrderRequest.value?.symbol
+  return requestSymbol && !marketInstruments.some(item => item.code === requestSymbol.code) ? [requestSymbol, ...marketInstruments] : marketInstruments
+})
+const allPositionRows = computed(() => {
+  const baseRows = [...variantRows, ...variantRows.map(p => ({ ...p, id: p.id.replace('T0', 'T1'), qty: p.qty * 2, available: p.available * 2, value: p.value * 2, account: 'TZS_T1' }))]
+  const syncedKeys = new Set(syncedHtPositions.value.map(row => `${row.account}:${row.code}`))
+  return [...syncedHtPositions.value, ...baseRows.filter(row => !syncedKeys.has(`${row.account}:${row.code}`))]
+})
 const allRows = computed(() => allPositionRows.value.filter(row => effectiveAccountIds.value.includes(row.account)))
 const filtered = computed(() => allRows.value.filter(p => (!appliedPositionFilters.value.query || `${p.code}${p.name}`.includes(appliedPositionFilters.value.query.trim())) && (appliedPositionFilters.value.market === 'ALL' || p.market === appliedPositionFilters.value.market) && (appliedPositionFilters.value.positionType === 'ALL' || p.direction === appliedPositionFilters.value.positionType) && (appliedPositionFilters.value.orderType === 'ALL' || p.orderType === appliedPositionFilters.value.orderType)))
 const sortedRows = computed(() => {
@@ -212,7 +237,7 @@ const trades = computed(() => demoOrders.value
     id: `${order.id}-trade`,
     filledAmount: order.filledQuantity * order.filledPrice,
     filledTime: `${order.orderTime.slice(0, 10)} 10:${String(12 + index).padStart(2, '0')}:${String(18 + index).padStart(2, '0')}`,
-    tradeNo: `CJ${order.orderNo.slice(2)}`,
+    tradeNo: order.tradeNo || `CJ${order.orderNo.slice(2)}`,
     entrustNo: `${order.orderNo}-01`,
     tradeDate: order.orderTime.slice(0, 10).replaceAll('-', ''),
   }))
@@ -223,11 +248,15 @@ const trades = computed(() => demoOrders.value
     && (appliedTradeFilters.value.openClose === 'ALL' || trade.openClose === appliedTradeFilters.value.openClose)
     && (appliedTradeFilters.value.orderType === 'ALL' || trade.orderType === appliedTradeFilters.value.orderType)))
 const floatStyle = computed(() => dock.value === 'floating' ? { left: `${floating.value.x}px`, top: `${floating.value.y}px`, width:`${floating.value.width}px`, height:`${floating.value.height}px` } : {})
-const exportTargetLabel = computed(() => ({ positions: '持仓', orders: '订单', trades: '成交' }[exportTarget.value] || '数据'))
+const exportTargetLabel = computed(() => ({ positions: '持仓', orders: '订单', trades: '成交', trsPool: 'HT请求订单' }[exportTarget.value] || '数据'))
 function chooseVariant(id) { variant.value = id; dock.value = variants.find(v => v.id === id).dock; collapsed.value = false; history.replaceState(null,'',`${location.pathname}?layout=${id}`) }
 function openMessageCenter() { messageCenterVisible.value = true }
 function openHelpCenter() {
-  if (helpCenterUrl) window.open(helpCenterUrl, '_blank', 'noopener,noreferrer')
+  if (helpCenterUrl) {
+    window.open(helpCenterUrl, '_blank', 'noopener,noreferrer')
+    return
+  }
+  ElMessage.info('帮助中心地址正在配置中。')
 }
 function markMessageRead(message) { message.unread = false }
 function markAllMessagesRead() { messages.value.forEach(message => { message.unread = false }) }
@@ -457,17 +486,31 @@ function exportTrades(rows = trades.value) {
   ])
   downloadCsv('成交记录.csv', header, records)
 }
+function exportTrsPoolOrders(rows = trsPoolExportRows.value) {
+  const header = ['客户名', '客户编号', '交易账户', '交易类型', '订单类型', '标的物名称', '方向', '订单属性', '订单价格', '下单数量', '下单金额', '提交时间', '订单编号', '处理人', '处理时间']
+  const records = rows.map(row => [
+    row.customer, row.customerCode, row.account, row.tradeType, row.standard, row.underlying, row.direction, row.attribute,
+    row.price, row.quantity, row.amount, row.submittedAt, row.orderNo, row.handler || '--', row.processedAt || '--',
+  ])
+  downloadCsv('HT请求订单.csv', header, records)
+}
 function openExport(target) {
   exportTarget.value = target
   exportDateRange.value = []
   exportDialogVisible.value = true
 }
+function openTrsPoolExport(rows) {
+  trsPoolExportRows.value = rows
+  openExport('trsPool')
+}
 function exportRowDate(target, row) {
   if (target === 'positions') return row.positionDate
-  return target === 'orders' ? row.orderTime : row.filledTime
+  if (target === 'orders') return row.orderTime
+  if (target === 'trades') return row.filledTime
+  return row.submittedAt
 }
 function exportRowsFor(target) {
-  const rows = target === 'positions' ? sortedRows.value : target === 'orders' ? orders.value : trades.value
+  const rows = target === 'positions' ? sortedRows.value : target === 'orders' ? orders.value : target === 'trades' ? trades.value : trsPoolExportRows.value
   const [startDate, endDate] = exportDateRange.value || []
   if (!startDate || !endDate) return rows
   return rows.filter(row => {
@@ -480,6 +523,7 @@ function confirmExport() {
   if (exportTarget.value === 'positions') exportPositions(rows)
   if (exportTarget.value === 'orders') exportOrders(rows)
   if (exportTarget.value === 'trades') exportTrades(rows)
+  if (exportTarget.value === 'trsPool') exportTrsPoolOrders(rows)
   exportDialogVisible.value = false
 }
 function chooseDock(value) { dock.value = value; if(value === 'floating' && workspace.value) floating.value = {x:Math.max(0, workspace.value.clientWidth-350),y:12,width:340,height:Math.min(650,workspace.value.clientHeight-12)} }
@@ -532,11 +576,51 @@ function assetAmountParts(value) {
     { value: rest, unit: '' },
   ]
 }
-function acceptOrder(order) {
+function acceptOrder(order, { skipHtSync = false } = {}) {
   if (!systemRunning.value) return
   demoOrders.value.unshift(enrichOrder(order))
+  if (!skipHtSync) addManualEquityOrderToHt(order)
   tab.value = 'orders'
   publishTransactionMessage({ name: order.name, code: order.code, status: '订单已提交', quantity: order.quantity, quantityLabel: '订单数量', title: '订单提交成功' })
+}
+function openTrsOrderTicket(request) {
+  trsOrderRequest.value = request
+  trsOrderTicketVisible.value = true
+}
+function acceptTrsOrder(order) {
+  acceptOrder(order, { skipHtSync: true })
+  if (trsOrderRequest.value?.sourceOrderId) placedTrsOrder.value = { sourceOrderId: trsOrderRequest.value.sourceOrderId, order }
+  trsOrderRequest.value = null
+  trsOrderTicketVisible.value = false
+}
+function numericValue(value) { return Number(String(value ?? '').replace(/[^\d.-]/g, '')) || 0 }
+function recordHtDealInEquity({ order, deal, quantity }) {
+  const account = accountId.value
+  const [code, suffix] = String(order.code || '').split('.')
+  const customerPrice = numericValue(deal.customerPrice)
+  const filledQuantity = Number(quantity) || numericValue(order.quantity)
+  const value = customerPrice * filledQuantity
+  const id = `ht-deal-${order.id}`
+  const position = {
+    id, code, name: order.underlying, market: suffix === 'SH' ? 'SH' : 'SZ', price: customerPrice, cost: customerPrice, change: 0,
+    qty: filledQuantity, available: filledQuantity, direction: order.direction === '卖出' ? '空' : '多', currency: 'CNY', executionType: 'highTouch',
+    orderType: '手工单', algorithm: 'DMA', orderRemark: `来源 HT 订单：${order.orderNo}`, traderRemark: '已同步成交结果', opening: 0,
+    value, valueWan: value / 10000, marginOccupied: value * 0.1, marginRate: 10, floatingProfit: 0, dailyRealizedProfit: 0, totalProfit: 0,
+    positionDate: timestampNow().slice(0, 10), account, lotSize: 100,
+  }
+  syncedHtPositions.value = [position, ...syncedHtPositions.value.filter(item => item.id !== id)]
+  demoOrders.value = [enrichOrder({
+    id, orderNo: `HT-${order.orderNo}`, tradeNo: deal.dealNo, account, code, name: order.underlying, executionType: 'highTouch', algorithm: 'DMA',
+    type: 'limit', side: order.direction === '卖出' ? 'sell' : 'buy', openClose: order.attribute === '平仓' ? '平' : '开', price: customerPrice,
+    quantity: filledQuantity, inputAmount: order.orderValueMode === 'amount' ? numericValue(order.amountValue ?? order.amount) : null, estimate: value,
+    status: '完成', attribute: `限价·${order.orderValueMode === 'amount' ? '金额' : '数量'}`,
+    orderValueNumber: order.orderValueMode === 'amount' ? numericValue(order.amountValue ?? order.amount) : filledQuantity,
+    orderValue: order.orderValueMode === 'amount' ? `${money(numericValue(order.amountValue ?? order.amount))} CNY` : `${number(filledQuantity)} 股`,
+    filledQuantity, filledPrice: customerPrice, feedback: `HT 订单 ${order.orderNo} 成交已同步。`, orderTime: timestampNow(),
+    orderRemark: `来源 HT 订单：${order.orderNo}`, traderRemark: '已同步成交结果',
+  }), ...demoOrders.value.filter(item => item.id !== id)]
+  tab.value = 'trades'
+  publishTransactionMessage({ name: order.underlying, code, status: '订单全部成交', quantity: filledQuantity, price: customerPrice, title: 'HT订单成交已同步' })
 }
 function loadPositionIntoTicket(row) {
   if (!systemRunning.value) return
@@ -718,8 +802,8 @@ onBeforeUnmount(() => {
     <header class="variant-header">
       <img :src="assetUrl('logo-faucon-trade.png')" alt="FAUCON TRADE"><i class="header-brand-divider" aria-hidden="true"></i>
       <nav aria-label="产品菜单">
-        <button v-for="item in visibleNav" :key="item.label" :class="{ active: activeNav === item.label }" @click="activeNav = item.label"><span class="nav-menu-content"><span class="source-composite variant-nav-icon" aria-hidden="true"><img v-for="part in item.icon" :key="part[0]" :src="assetUrl(part[0])" :style="{ left: `${part[1]}px`, top: `${part[2]}px`, width: `${part[3]}px`, height: `${part[4]}px` }" alt=""></span><span class="nav-menu-label">{{ item.label }}</span></span></button>
-        <el-dropdown v-if="overflowNav.length" trigger="click" popper-class="variant-nav-popper" @command="label => activeNav = label"><button class="more-nav" :class="{ active: overflowNav.some(item => item.label === activeNav) }">更多<el-icon><CaretBottom /></el-icon></button><template #dropdown><el-dropdown-menu><el-dropdown-item v-for="item in overflowNav" :key="item.label" :command="item.label"><span class="source-composite variant-nav-icon" aria-hidden="true"><img v-for="part in item.icon" :key="part[0]" :src="assetUrl(part[0])" :style="{ left: `${part[1]}px`, top: `${part[2]}px`, width: `${part[3]}px`, height: `${part[4]}px` }" alt=""></span>{{ item.label }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
+        <button v-for="item in visibleNav" :key="item.label" :class="{ active: activeNav === item.label }" @click="selectProductNav(item.label)"><span class="nav-menu-content"><span class="source-composite variant-nav-icon" aria-hidden="true"><img v-for="part in item.icon" :key="part[0]" :src="assetUrl(part[0])" :style="{ left: `${part[1]}px`, top: `${part[2]}px`, width: `${part[3]}px`, height: `${part[4]}px` }" alt=""></span><span class="nav-menu-label">{{ item.label }}</span></span></button>
+        <el-dropdown v-if="overflowNav.length" trigger="click" popper-class="variant-nav-popper" @command="selectProductNav"><button class="more-nav" :class="{ active: overflowNav.some(item => item.label === activeNav) }">更多<el-icon><CaretBottom /></el-icon></button><template #dropdown><el-dropdown-menu><el-dropdown-item v-for="item in overflowNav" :key="item.label" :command="item.label"><span class="source-composite variant-nav-icon" aria-hidden="true"><img v-for="part in item.icon" :key="part[0]" :src="assetUrl(part[0])" :style="{ left: `${part[1]}px`, top: `${part[2]}px`, width: `${part[3]}px`, height: `${part[4]}px` }" alt=""></span>{{ item.label }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
       </nav>
       <section v-if="showHeaderNotice && systemNoticeEnabled && !systemRunning" class="header-marquee" aria-label="系统通知" role="button" tabindex="0" @click="openMessageCenter" @keydown.enter="openMessageCenter"><el-icon><InfoFilled /></el-icon><b>系统通知</b><span class="notice-scroll"><i>{{ headerNotice.text }}　{{ headerNotice.text }}</i></span><button type="button" aria-label="关闭系统通知" @click.stop="dismissHeaderNotice"><el-icon><Close /></el-icon></button></section>
       <div class="variant-header-end"><button class="notification-action" aria-label="打开消息中心" @click="openMessageCenter"><ClientLineIcon type="notification" /><em v-if="showUnreadBadge && unreadMessageCount">{{ unreadMessageCount }}</em></button><button class="header-settings-action" aria-label="系统设置" @click="settingsVisible=true"><el-icon><Setting /></el-icon></button><el-tooltip :content="helpCenterUrl ? '打开帮助中心' : '帮助中心地址待配置'" placement="bottom"><button class="header-help-action" :aria-label="helpCenterUrl ? '打开帮助中心' : '帮助中心地址待配置'" @click="openHelpCenter"><ClientLineIcon type="help" /></button></el-tooltip><button type="button" class="small-avatar avatar-toast-trigger" aria-label="触发交易消息提示" @click="triggerDemoTransactionToast">K</button><span>Kevin Zhang</span></div>
@@ -729,17 +813,23 @@ onBeforeUnmount(() => {
         <button v-for="group in traderPrimaryMenu" :key="group.key" type="button" :class="{ active: activeTraderPrimary === group.key }" @click="selectTraderPrimary(group.key)">
           <el-icon><component :is="group.icon" /></el-icon><span>{{ group.label }}</span>
         </button>
+        <button v-if="traderSecondaryCollapsed" type="button" class="trader-primary-expand" aria-label="展开二级菜单" @click="traderSecondaryCollapsed=false"><el-icon><Expand /></el-icon></button>
       </nav>
       <aside class="trader-secondary-nav" aria-label="交易员中心二级菜单">
-        <header><span>{{ activeTraderGroup.title }}</span><button type="button" class="trader-secondary-collapse" :aria-label="traderSecondaryCollapsed ? '展开二级菜单' : '收起二级菜单'" @click="traderSecondaryCollapsed = !traderSecondaryCollapsed"><el-icon><component :is="traderSecondaryCollapsed ? ArrowRight : ArrowLeft" /></el-icon></button></header>
+        <header><span>{{ activeTraderGroup.title }}</span><button type="button" class="trader-secondary-collapse" aria-label="收起二级菜单" @click="traderSecondaryCollapsed = true"><el-icon><Fold /></el-icon></button></header>
         <nav>
           <button v-for="item in activeTraderGroup.children" :key="item.label" type="button" :class="{ active: activeTraderSecondary === item.label }" @click="activeTraderSecondary = item.label"><el-icon><component :is="item.icon" /></el-icon><span>{{ item.label }}</span></button>
         </nav>
       </aside>
-      <section class="trader-center-canvas" :aria-label="activeTraderSecondary"></section>
+      <TrsOrderPool v-if="activeTraderPrimary === 'swap' && activeTraderSecondary === '订单管理'" @open-my-orders="activeTraderSecondary = '我的HT订单'" @export="openTrsPoolExport" />
+      <TrsMyHtOrders v-else-if="activeTraderPrimary === 'swap' && activeTraderSecondary === '我的HT订单'" :placed-trs-order="placedTrsOrder" @back-to-pool="activeTraderSecondary = '订单管理'" @place-order="openTrsOrderTicket" @deal-recorded="recordHtDealInEquity" />
+      <section v-else class="trader-center-canvas" :aria-label="activeTraderSecondary"></section>
+      <el-drawer v-model="trsOrderTicketVisible" title="快速下单" direction="rtl" size="602px" :close-on-click-modal="false" :close-on-press-escape="false" class="trs-quick-order-drawer">
+        <TrsQuickOrderWorkspace :instruments="trsTicketInstruments" :accounts="accounts" :symbol="trsTicketSymbol" :account="account" :paused="!systemRunning" :ticket-context="{ executionType: 'highTouch', algorithm: 'DMA' }" :initial-order="trsOrderRequest?.initialOrder" @account-select="selectTicketAccount" @select="code => { selectedCode = code }" @order="acceptTrsOrder" />
+      </el-drawer>
     </section>
     <section v-else-if="isUnderDevelopment" class="development-placeholder" aria-label="功能开发中"><p>当前功能正在开发中</p></section>
-    <template v-else>
+    <template v-if="activeNav !== '交易员中心' && !isUnderDevelopment">
     <aside class="transaction-toast-stack" aria-live="polite" aria-label="订单结果提示">
       <transition-group name="transaction-toast">
         <article v-for="toast in transactionToasts" :key="toast.message.id" class="transaction-toast-card">
@@ -934,6 +1024,8 @@ onBeforeUnmount(() => {
       </template>
       <template #footer><el-button @click="cancelOrderVisible=false">取消[Esc]</el-button><el-button type="primary" @click="confirmCancelOrder">确认撤单[Enter]</el-button></template>
     </BaseDialog>
+    </template>
+
     <BaseDialog v-model="messageCenterVisible" width="760px" align-center class="message-center-dialog" :show-close="false">
       <template #header><header class="message-center-header"><h2>消息中心</h2><div class="message-header-actions"><button type="button" class="message-close-action" aria-label="关闭消息中心" @click="messageCenterVisible=false"><el-icon><Close /></el-icon></button></div></header></template>
       <div class="message-center-layout"><nav class="message-category-tabs" aria-label="消息分类"><button v-for="category in messageCategories" :key="category" :class="{ active: messageCategory === category }" @click="messageCategory=category"><img class="message-category-icon" :src="messageIcon(category)" alt=""><span>{{ category }}</span><i v-if="categoryUnreadCount(category)">{{ categoryUnreadCount(category) }}</i></button></nav>
@@ -955,6 +1047,5 @@ onBeforeUnmount(() => {
       <div v-else class="settings-layout"><nav class="settings-nav"><button v-for="item in settingMenu" :key="item.key" :class="{ active: activeSetting === item.key }" @click="scrollToSetting(item.key)"><SettingsMenuIcon :name="item.key" />{{ item.label }}</button></nav><el-scrollbar class="settings-content"><section id="equity-account-setting" class="settings-section"><h3>账号信息</h3><div class="setting-row"><span>登录密码</span><el-button plain @click="openPasswordDialog">修改密码</el-button></div><div class="setting-row"><span>开机启动</span><el-switch v-model="autoLaunch" /></div></section><section id="equity-language-setting" class="settings-section"><h3>语言设置</h3><div class="setting-row"><span>显示语言</span><el-radio-group v-model="language" class="settings-radio-group"><el-radio class="settings-radio" value="简体中文">简体中文</el-radio><el-radio class="settings-radio" value="繁體中文">繁體中文</el-radio><el-radio class="settings-radio" value="English">English</el-radio></el-radio-group></div></section><section id="equity-trading-setting" class="settings-section"><h3>交易与行情设置</h3><div class="setting-row"><span>订单价格设置</span><el-radio-group v-model="orderPrice" class="settings-radio-group"><el-radio class="settings-radio" value="买一">买一</el-radio><el-radio class="settings-radio" value="卖一">卖一</el-radio><el-radio class="settings-radio" value="最新价">最新价</el-radio></el-radio-group></div><div class="setting-row"><span>涨跌幅颜色</span><el-radio-group v-model="colorRule" class="settings-radio-group"><el-radio class="settings-radio" value="red-up">红涨绿跌</el-radio><el-radio class="settings-radio" value="green-up">绿涨红跌</el-radio></el-radio-group></div><div class="price-preview" :class="pricePreviewClass"><span class="up">↑ 2.48%</span><span class="down">↓ 1.36%</span></div></section><section id="equity-appearance-setting" class="settings-section"><h3>系统外观</h3><div class="setting-row"><span>主题模式</span><el-radio-group v-model="theme" class="settings-radio-group"><el-radio class="settings-radio" value="dark">深色模式</el-radio><el-radio class="settings-radio" value="light">浅色模式</el-radio></el-radio-group></div><div class="theme-cards"><button :class="{ selected: theme === 'dark' }" @click="theme='dark'"><span class="mini-screen dark"><i /><b /><em /><em /><em /></span>深色模式</button><button :class="{ selected: theme === 'light' }" @click="theme='light'"><span class="mini-screen light"><i /><b /><em /><em /><em /></span>浅色模式</button></div></section></el-scrollbar></div>
       <template #footer><div v-if="settingsDetail === 'password'" class="settings-footer"><el-button @click="closePasswordDialog">取消[Esc]</el-button><el-button type="primary" @click="confirmPasswordChange">确认修改[Enter]</el-button></div><div v-else class="settings-footer"><el-button @click="closeSettings">取消[Esc]</el-button><el-button type="primary" @click="saveSettings">保存设置[Enter]</el-button></div></template>
     </BaseDialog>
-    </template>
   </main>
 </template>
