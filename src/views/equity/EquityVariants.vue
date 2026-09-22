@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDownBold, Bell, CaretBottom, ChatDotRound, Search, Setting, InfoFilled, View, Hide, CircleCheck, CircleClose, Close, EditPen, List, More } from '@element-plus/icons-vue'
+import { ArrowDownBold, ArrowLeft, ArrowRight, Bell, Briefcase, CaretBottom, ChatDotRound, Clock, Collection, Connection, Document, Search, Setting, InfoFilled, View, Hide, CircleCheck, CircleClose, Close, EditPen, List, More, Tickets } from '@element-plus/icons-vue'
 import ClientLineIcon from '../../ClientLineIcon.vue'
 import SettingsMenuIcon from '../../SettingsMenuIcon.vue'
 import { accounts } from './fixtures'
@@ -82,12 +82,26 @@ const mainNav = [
   { label: '期权交易', icon: [['u83.svg', 0, 0, 13, 14], ['u84.svg', 7, 8, 6, 6]] },
   { label: '融资申请', icon: [['u90.svg', 2, 0, 10, 8], ['u91.svg', 0, 9, 14, 5]] },
   { label: '策略交易', hidden: true, icon: [['u100.svg', 0, 0, 12, 12], ['u101.svg', 3, 11, 7, 5]] },
-  { label: '模拟交易', icon: [['u107.svg', 0, 0, 6, 7], ['u108.svg', 5, 0, 11, 15]] },
+  { label: '交易员中心', icon: [['u100.svg', 0, 0, 12, 12], ['u101.svg', 3, 11, 7, 5]] },
   { label: '数据', icon: [['u114.svg', 0, 0, 12, 13], ['u115.svg', 7, 6, 8, 8]] },
 ]
 const availableNav = computed(() => mainNav.filter(item => !item.hidden))
 const overflowNav = computed(() => viewportWidth.value <= 980 ? availableNav.value.slice(3) : viewportWidth.value <= 1200 ? availableNav.value.slice(4) : [])
 const visibleNav = computed(() => availableNav.value.slice(0, availableNav.value.length - overflowNav.value.length))
+const traderPrimaryMenu = [
+  { key: 'options', label: '期权', title: '期权交易', icon: List, children: [{ label: '期权交易', icon: Tickets }, { label: '期权簿记', icon: Collection }, { label: '持仓管理', icon: Briefcase }, { label: '生命周期', icon: Clock }] },
+  { key: 'swap', label: 'TRS', title: '收益互换', icon: Connection, children: [{ label: '订单管理', icon: Document }, { label: '我的HT订单', icon: Collection }] },
+]
+const activeTraderPrimary = ref('options')
+const activeTraderSecondary = ref('期权交易')
+const traderSecondaryCollapsed = ref(false)
+const activeTraderGroup = computed(() => traderPrimaryMenu.find(item => item.key === activeTraderPrimary.value) || traderPrimaryMenu[0])
+function selectTraderPrimary(key) {
+  const group = traderPrimaryMenu.find(item => item.key === key)
+  if (!group) return
+  activeTraderPrimary.value = key
+  activeTraderSecondary.value = group.children[0].label
+}
 const allAccountsValue = '__ALL_ACCOUNTS__'
 const workspace = ref(null), accountId = ref('TZS_T0'), selectedAccountIds = ref(['TZS_T0']), previousAccountSelection = ref(['TZS_T0']), query = ref(''), market = ref('ALL'), positionType = ref('ALL')
 const globalAccountSearch = ref('')
@@ -709,6 +723,21 @@ onBeforeUnmount(() => {
       <section v-if="showHeaderNotice && systemNoticeEnabled && !systemRunning" class="header-marquee" aria-label="系统通知" role="button" tabindex="0" @click="openMessageCenter" @keydown.enter="openMessageCenter"><el-icon><InfoFilled /></el-icon><b>系统通知</b><span class="notice-scroll"><i>{{ headerNotice.text }}　{{ headerNotice.text }}</i></span><button type="button" aria-label="关闭系统通知" @click.stop="dismissHeaderNotice"><el-icon><Close /></el-icon></button></section>
       <div class="variant-header-end"><button class="notification-action" aria-label="打开消息中心" @click="openMessageCenter"><ClientLineIcon type="notification" /><em v-if="showUnreadBadge && unreadMessageCount">{{ unreadMessageCount }}</em></button><button class="header-settings-action" aria-label="系统设置" @click="settingsVisible=true"><el-icon><Setting /></el-icon></button><el-tooltip :content="helpCenterUrl ? '打开帮助中心' : '帮助中心地址待配置'" placement="bottom"><button class="header-help-action" :aria-label="helpCenterUrl ? '打开帮助中心' : '帮助中心地址待配置'" @click="openHelpCenter"><ClientLineIcon type="help" /></button></el-tooltip><button type="button" class="small-avatar avatar-toast-trigger" aria-label="触发交易消息提示" @click="triggerDemoTransactionToast">K</button><span>Kevin Zhang</span></div>
     </header>
+    <section v-if="activeNav === '交易员中心'" class="trader-center-layout" :class="{ 'is-secondary-collapsed': traderSecondaryCollapsed }" aria-label="交易员中心">
+      <nav class="trader-primary-nav" aria-label="交易员中心一级菜单">
+        <button v-for="group in traderPrimaryMenu" :key="group.key" type="button" :class="{ active: activeTraderPrimary === group.key }" @click="selectTraderPrimary(group.key)">
+          <el-icon><component :is="group.icon" /></el-icon><span>{{ group.label }}</span>
+        </button>
+      </nav>
+      <aside class="trader-secondary-nav" aria-label="交易员中心二级菜单">
+        <header><span>{{ activeTraderGroup.title }}</span><button type="button" class="trader-secondary-collapse" :aria-label="traderSecondaryCollapsed ? '展开二级菜单' : '收起二级菜单'" @click="traderSecondaryCollapsed = !traderSecondaryCollapsed"><el-icon><component :is="traderSecondaryCollapsed ? ArrowRight : ArrowLeft" /></el-icon></button></header>
+        <nav>
+          <button v-for="item in activeTraderGroup.children" :key="item.label" type="button" :class="{ active: activeTraderSecondary === item.label }" @click="activeTraderSecondary = item.label"><el-icon><component :is="item.icon" /></el-icon><span>{{ item.label }}</span></button>
+        </nav>
+      </aside>
+      <section class="trader-center-canvas" :aria-label="activeTraderSecondary"></section>
+    </section>
+    <template v-else>
     <aside class="transaction-toast-stack" aria-live="polite" aria-label="订单结果提示">
       <transition-group name="transaction-toast">
         <article v-for="toast in transactionToasts" :key="toast.message.id" class="transaction-toast-card">
@@ -924,5 +953,6 @@ onBeforeUnmount(() => {
       <div v-else class="settings-layout"><nav class="settings-nav"><button v-for="item in settingMenu" :key="item.key" :class="{ active: activeSetting === item.key }" @click="scrollToSetting(item.key)"><SettingsMenuIcon :name="item.key" />{{ item.label }}</button></nav><el-scrollbar class="settings-content"><section id="equity-account-setting" class="settings-section"><h3>账号信息</h3><div class="setting-row"><span>登录密码</span><el-button plain @click="openPasswordDialog">修改密码</el-button></div><div class="setting-row"><span>开机启动</span><el-switch v-model="autoLaunch" /></div></section><section id="equity-language-setting" class="settings-section"><h3>语言设置</h3><div class="setting-row"><span>显示语言</span><el-radio-group v-model="language" class="settings-radio-group"><el-radio class="settings-radio" value="简体中文">简体中文</el-radio><el-radio class="settings-radio" value="繁體中文">繁體中文</el-radio><el-radio class="settings-radio" value="English">English</el-radio></el-radio-group></div></section><section id="equity-trading-setting" class="settings-section"><h3>交易与行情设置</h3><div class="setting-row"><span>订单价格设置</span><el-radio-group v-model="orderPrice" class="settings-radio-group"><el-radio class="settings-radio" value="买一">买一</el-radio><el-radio class="settings-radio" value="卖一">卖一</el-radio><el-radio class="settings-radio" value="最新价">最新价</el-radio></el-radio-group></div><div class="setting-row"><span>涨跌幅颜色</span><el-radio-group v-model="colorRule" class="settings-radio-group"><el-radio class="settings-radio" value="red-up">红涨绿跌</el-radio><el-radio class="settings-radio" value="green-up">绿涨红跌</el-radio></el-radio-group></div><div class="price-preview" :class="pricePreviewClass"><span class="up">↑ 2.48%</span><span class="down">↓ 1.36%</span></div></section><section id="equity-appearance-setting" class="settings-section"><h3>系统外观</h3><div class="setting-row"><span>主题模式</span><el-radio-group v-model="theme" class="settings-radio-group"><el-radio class="settings-radio" value="dark">深色模式</el-radio><el-radio class="settings-radio" value="light">浅色模式</el-radio></el-radio-group></div><div class="theme-cards"><button :class="{ selected: theme === 'dark' }" @click="theme='dark'"><span class="mini-screen dark"><i /><b /><em /><em /><em /></span>深色模式</button><button :class="{ selected: theme === 'light' }" @click="theme='light'"><span class="mini-screen light"><i /><b /><em /><em /><em /></span>浅色模式</button></div></section></el-scrollbar></div>
       <template #footer><div v-if="settingsDetail === 'password'" class="settings-footer"><el-button @click="closePasswordDialog">取消[Esc]</el-button><el-button type="primary" @click="confirmPasswordChange">确认修改[Enter]</el-button></div><div v-else class="settings-footer"><el-button @click="closeSettings">取消[Esc]</el-button><el-button type="primary" @click="saveSettings">保存设置[Enter]</el-button></div></template>
     </BaseDialog>
+    </template>
   </main>
 </template>

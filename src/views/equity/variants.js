@@ -4,6 +4,7 @@ import 'element-plus/dist/index.css'
 import '../../theme-tokens.css'
 import './theme.css'
 import './variants.css'
+import './trader-center.css'
 import '../../semantic-colors.css'
 import EquityVariants from './EquityVariants.vue'
 
