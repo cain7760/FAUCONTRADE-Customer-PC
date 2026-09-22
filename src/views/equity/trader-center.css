@@ -162,3 +162,17 @@
   min-width: 0;
   background: #111315;
 }
+
+.variants-app .development-placeholder {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  place-items: center;
+  background: #111315;
+}
+
+.development-placeholder p {
+  margin: 0;
+  color: #7f8793;
+  font-size: 13px;
+}

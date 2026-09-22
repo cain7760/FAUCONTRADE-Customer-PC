@@ -88,6 +88,7 @@ const mainNav = [
 const availableNav = computed(() => mainNav.filter(item => !item.hidden))
 const overflowNav = computed(() => viewportWidth.value <= 980 ? availableNav.value.slice(3) : viewportWidth.value <= 1200 ? availableNav.value.slice(4) : [])
 const visibleNav = computed(() => availableNav.value.slice(0, availableNav.value.length - overflowNav.value.length))
+const isUnderDevelopment = computed(() => ['期权交易', '融资申请', '数据'].includes(activeNav.value))
 const traderPrimaryMenu = [
   { key: 'options', label: '期权', title: '期权交易', icon: List, children: [{ label: '期权交易', icon: Tickets }, { label: '期权簿记', icon: Collection }, { label: '持仓管理', icon: Briefcase }, { label: '生命周期', icon: Clock }] },
   { key: 'swap', label: 'TRS', title: '收益互换', icon: Connection, children: [{ label: '订单管理', icon: Document }, { label: '我的HT订单', icon: Collection }] },
@@ -737,6 +738,7 @@ onBeforeUnmount(() => {
       </aside>
       <section class="trader-center-canvas" :aria-label="activeTraderSecondary"></section>
     </section>
+    <section v-else-if="isUnderDevelopment" class="development-placeholder" aria-label="功能开发中"><p>当前功能正在开发中</p></section>
     <template v-else>
     <aside class="transaction-toast-stack" aria-live="polite" aria-label="订单结果提示">
       <transition-group name="transaction-toast">
