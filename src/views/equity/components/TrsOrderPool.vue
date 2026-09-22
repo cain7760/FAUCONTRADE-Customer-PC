@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { RefreshLeft, Search } from '@element-plus/icons-vue'
+import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
 import BaseDialog from '../../../components/BaseDialog.vue'
 import TrsApprovalDialog from './TrsApprovalDialog.vue'
 import TradingFilterField from './TradingFilterField.vue'
@@ -21,6 +21,7 @@ const rejectionIds = ref([])
 const detailOrder = ref(null)
 const rejectionReason = ref('')
 const rejectionError = ref('')
+const tableRefreshKey = ref(0)
 
 const orders = poolOrders
 const traderOrders = traderHtOrders
@@ -83,6 +84,7 @@ function openDetail(order) {
   detailOrder.value = order
   detailVisible.value = true
 }
+function refreshTable() { tableRefreshKey.value += 1 }
 </script>
 
 <template>
@@ -110,11 +112,11 @@ function openDetail(order) {
     <div class="trs-pool-toolbar">
       <div v-if="poolStatus === 'pending'" class="trs-pool-actions"><el-button type="primary" :disabled="!selectedIds.length" @click="claim()">批量认领</el-button><button type="button" :disabled="!canBatchReject" class="is-danger" @click="openReject()">批量拒单</button></div>
       <p v-else>{{ poolStatus === 'processing' ? '处理中订单已由交易员认领。' : '已处理订单仅供查询。' }}</p>
-      <el-tooltip content="导出当前筛选结果" placement="top"><button type="button" class="trs-pool-export" aria-label="导出订单池" @click="emit('export', visibleOrders)"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></el-tooltip>
+      <div class="trs-pool-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button type="button" class="trs-pool-refresh" aria-label="刷新订单池" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><el-tooltip content="导出当前筛选结果" placement="top"><button type="button" class="trs-pool-export" aria-label="导出订单池" @click="emit('export', visibleOrders)"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></el-tooltip></div>
     </div>
 
     <div class="trs-pool-table-wrap">
-      <TradingTable :key="poolStatus" :data="visibleOrders" row-key="id" height="100%" class="trs-pool-trading-table" empty-text="暂无符合条件的HT请求" @selection-change="rows => selectedIds = rows.map(row => row.id)">
+      <TradingTable :key="`${poolStatus}-${tableRefreshKey}`" :data="visibleOrders" row-key="id" height="100%" class="trs-pool-trading-table" empty-text="暂无符合条件的HT请求" @selection-change="rows => selectedIds = rows.map(row => row.id)">
         <el-table-column v-if="poolStatus === 'pending'" type="selection" width="42" fixed="left" />
         <el-table-column prop="customer" label="客户名" width="88" />
         <el-table-column prop="customerCode" label="客户编号" width="90" />

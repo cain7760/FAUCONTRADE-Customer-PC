@@ -1776,3 +1776,9 @@
 .trs-status-filter-popper .el-select-dropdown__item .el-checkbox {
   pointer-events: none;
 }
+
+.trs-pool-toolbar-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.trs-pool-refresh { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 1px solid #3d424b; border-radius: 3px; background: #272a2f; color: #9ba4af; cursor: pointer; }
+.trs-pool-refresh:hover { border-color: #bb984a; background: #353026; color: #e1c36f; }
+.trs-pool-refresh .el-icon { font-size: 14px; }
+.trs-pool-toolbar-actions .trs-pool-export { margin-left: 0; }
