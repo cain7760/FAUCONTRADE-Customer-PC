@@ -18,9 +18,21 @@ export const poolOrders = ref([
 ])
 
 export const claimedHtOrders = ref([])
-export const traderHtOrders = ref(poolOrders.value.filter(order => order.status !== 'pending').map(order => ({ ...order, id: `trader-${order.id}` })))
+const isSystemRequest = order => ['改单', '撤单'].includes(order.tradeType)
+const systemCompletedRequests = poolOrders.value.filter(order => order.status === 'pending' && isSystemRequest(order))
+export const traderHtOrders = ref([
+  ...poolOrders.value.filter(order => order.status !== 'pending').map(order => ({ ...order, id: `trader-${order.id}` })),
+  ...systemCompletedRequests.map(order => ({
+    ...order,
+    id: `trader-${order.id}`,
+    status: 'processed',
+    handler: '系统',
+    processedAt: '2026-09-22 10:08:20',
+    remark: `${order.remark || ''}${order.riskTag === 'rejected' ? ' 风控校验失败，改单已自动失败。' : ` ${order.tradeType}已由系统自动完成。`}`,
+  })),
+])
 
-poolOrders.value = poolOrders.value.filter(order => order.status === 'pending')
+poolOrders.value = poolOrders.value.filter(order => order.status === 'pending' && !isSystemRequest(order))
 
 const claimedCustomerNames = ['Kevin_292933', 'Olivia_102484', 'Ethan_843701']
 

@@ -144,7 +144,7 @@ const orders = ref([
   { id: 'trs-001', underlying: '中证500指数收益互换', code: '000905.SH', customer: '华信资产管理', orderNo: 'HT202609220001', standard: '标准', status: 'orderPending', account: 'TRS_T0 - 自营一号', direction: '买入', attribute: '开仓', price: '6,850.00', quantity: '1,000 万', amount: '10,000,000.00 CNY', submittedAt: '2026-09-22 09:36:12', remark: '请在流动性允许范围内完成建仓。', customerCode: 'CUS-001024', assets: '128,560,000.00 CNY', available: '46,250,000.00 CNY' },
   { id: 'trs-014', underlying: '中国平安', code: '601318.SH', customer: '吴桐资产', orderNo: 'HT202609220013', standard: '标准', status: 'orderPending', account: 'TRS_T1 - 自营二号', direction: '买入', attribute: '开仓', price: '48.60', quantity: '493,827 股', quantityValue: 493827, amount: '24,000,000.00 CNY', amountValue: 24000000, orderValueMode: 'amount', submittedAt: '2026-09-22 10:52:16', remark: '客户按订单金额提交，拆单时按金额分配。', customerCode: 'CUS-003106', assets: '156,900,000.00 CNY', available: '51,680,000.00 CNY' },
   { id: 'trs-002', underlying: '沪深300指数收益互换', code: '000300.SH', customer: '景行私募基金', orderNo: 'HT202609220002', standard: '非标', status: 'orderProcessed', account: 'TRS_T0 - 自营一号', direction: '卖出', attribute: '平仓', price: '3,962.18', quantity: '800 万', amount: '8,000,000.00 CNY', submittedAt: '2026-09-22 09:41:06', remark: '与原合约同日结算。', customerCode: 'CUS-001138', assets: '92,800,000.00 CNY', available: '18,420,000.00 CNY' },
-  { id: 'trs-003', underlying: '中证新能源指数收益互换', code: '930997.CSI', customer: '明德投资', orderNo: 'HT202609220003', standard: '标准', status: 'amendPending', account: 'TRS_T1 - 自营二号', direction: '买入', attribute: '开仓', price: '2,185.30', quantity: '500 万', amount: '5,000,000.00 CNY', submittedAt: '2026-09-22 09:48:24', remark: '客户申请调整委托价格。', customerCode: 'CUS-001516', assets: '76,230,000.00 CNY', available: '21,630,000.00 CNY', request: '客户申请将委托价格调整为 2,210.00。' },
+  { id: 'trs-003', underlying: '中证新能源指数收益互换', code: '930997.CSI', customer: '明德投资', orderNo: 'HT202609220003', standard: '标准', status: 'amendPending', amendedPrice: 2210, account: 'TRS_T1 - 自营二号', direction: '买入', attribute: '开仓', price: '2,185.30', quantity: '500 万', amount: '5,000,000.00 CNY', submittedAt: '2026-09-22 09:48:24', remark: '客户申请调整委托价格。', customerCode: 'CUS-001516', assets: '76,230,000.00 CNY', available: '21,630,000.00 CNY', request: '客户申请将委托价格调整为 2,210.00。' },
   { id: 'trs-004', underlying: '中证红利低波指数收益互换', code: 'H30269.CSI', customer: '安和基金', orderNo: 'HT202609220004', standard: '非标', status: 'cancelPending', account: 'TRS_T1 - 自营二号', direction: '卖出', attribute: '平仓', price: '9,672.40', quantity: '300 万', amount: '3,000,000.00 CNY', submittedAt: '2026-09-22 09:56:40', remark: '客户申请撤销未成交部分。', customerCode: 'CUS-001882', assets: '55,800,000.00 CNY', available: '12,410,000.00 CNY', request: '客户申请撤销当前委托。' },
   { id: 'trs-006', underlying: '中证银行指数收益互换', code: '399986.SZ', customer: '嘉禾资产', orderNo: 'HT202609220005', standard: '标准', status: 'orderPending', account: 'TRS_T0 - 自营一号', direction: '买入', attribute: '开仓', price: '6,104.72', quantity: '1,200 万', amount: '12,000,000.00 CNY', submittedAt: '2026-09-22 10:06:18', remark: '优先使用现券对冲风险敞口。', customerCode: 'CUS-002084', assets: '142,680,000.00 CNY', available: '38,990,000.00 CNY' },
   { id: 'trs-007', underlying: '国证2000指数收益互换', code: '399303.SZ', customer: '恒睿资本', orderNo: 'HT202609220006', standard: '非标', status: 'orderProcessed', account: 'TRS_T2 - 自营三号', direction: '卖出', attribute: '平仓', price: '7,326.15', quantity: '450 万', amount: '4,500,000.00 CNY', submittedAt: '2026-09-22 10:12:36', remark: '与客户确认净额结算日期。', customerCode: 'CUS-002249', assets: '63,440,000.00 CNY', available: '15,720,000.00 CNY' },
@@ -181,8 +181,8 @@ const orders = ref([
   }
 }))
 
-const statusLabel = { orderPending: '下单待处理', orderProcessed: '上手方待反馈', amendPending: '改单待反馈', riskCheckFailed: '风控校验失败', cancelPending: '撤单待反馈', cancelAllocationPending: '撤单待分配', feedbackPending: '上手方已反馈', approvalPending: '审批中', feedbackCompleted: '成交已反馈', cancelled: '已撤单', rejected: '已拒单', partialCancelled: '部成撤单' }
-const doneStatusLabel = { approvalPending: '审批中', orderProcessed: '上手方待反馈', feedbackCompleted: '已成交', cancelled: '已撤单', rejected: '已拒绝', partialCancelled: '部成撤单' }
+const statusLabel = { orderPending: '下单待处理', orderProcessed: '上手方待反馈', amendCompleted: '改单成功', amendFailed: '改单失败', feedbackPending: '上手方已反馈', approvalPending: '审批中', feedbackCompleted: '成交已反馈', cancelled: '已撤单', rejected: '已拒单', partialCancelled: '部成撤单' }
+const doneStatusLabel = { approvalPending: '审批中', orderProcessed: '上手方待反馈', amendCompleted: '改单成功', amendFailed: '改单失败', feedbackCompleted: '已成交', cancelled: '已撤单', rejected: '已拒绝', partialCancelled: '部成撤单' }
 const doneStatusValues = Object.keys(doneStatusLabel)
 const statusValues = Object.keys(statusLabel)
 const allStatusesSelected = computed(() => statusFilter.value.length === statusValues.length)
@@ -262,7 +262,7 @@ const approvalConfirmLabel = computed(() => approvalConfirmType.value === 'cance
 const progressSteps = computed(() => {
   const order = activeOrder.value
   if (!order) return []
-  const hasCustomerAmendment = ['amendPending', 'riskCheckFailed'].includes(order.status) || order.hasCustomerAmendment
+  const hasCustomerAmendment = ['amendPending', 'amendCompleted', 'amendFailed', 'riskCheckFailed'].includes(order.status) || order.hasCustomerAmendment
   const amendmentAfterTraderOrder = hasCustomerAmendment && Boolean(order.traderOrderPlaced || order.amendmentAfterTraderOrder || order.systemOrders?.length)
   const steps = [
     { id: 'customer-order', label: '客户已下单', stage: 1 },
@@ -276,7 +276,7 @@ const progressSteps = computed(() => {
     : order.status === 'feedbackPending' ? 'counterparty-feedback'
       : order.status === 'orderProcessed' ? 'counterparty-pending'
         : ['cancelPending', 'cancelAllocationPending', 'cancelled', 'partialCancelled'].includes(order.status) ? 'counterparty-pending'
-          : ['amendPending', 'riskCheckFailed'].includes(order.status) ? 'customer-amend'
+          : ['amendPending', 'amendCompleted', 'amendFailed', 'riskCheckFailed'].includes(order.status) ? 'customer-amend'
             : 'customer-order'
   const currentIndex = steps.findIndex(step => step.id === currentStepId)
   return steps.map((step, index) => ({ ...step, complete: index <= currentIndex }))
@@ -294,9 +294,8 @@ const customerFrameworkLabel = computed(() => activeOrder.value?.customerFramewo
 const splitValueLabel = computed(() => isAmountOrder.value ? '金额' : '数量')
 const splitInputLabel = computed(() => isAmountOrder.value ? '订单金额' : '订单数量')
 function toNumeric(value) { return Number(String(value ?? '').replace(/[^\d.-]/g, '')) || 0 }
-function originalOrderValue() {
-  const order = activeOrder.value
-  return isAmountOrder.value ? Number(order?.amountValue ?? toNumeric(order?.amount)) : Number(order?.quantityValue ?? toNumeric(order?.quantity))
+function originalOrderValue(order = activeOrder.value) {
+  return order?.orderValueMode === 'amount' ? Number(order?.amountValue ?? toNumeric(order?.amount)) : Number(order?.quantityValue ?? toNumeric(order?.quantity))
 }
 function formatSplitValue(value, mode = isAmountOrder.value) {
   const formatted = Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: mode ? 2 : 0, maximumFractionDigits: 2 })
@@ -615,8 +614,73 @@ function confirmLineCancel() {
 }
 function amendedOrderValue(order) {
   const value = order.orderValueMode === 'amount' ? order.amendedAmountValue : order.amendedQuantityValue
-  return Number(value ?? originalOrderValue()) || originalOrderValue()
+  return Number(value ?? originalOrderValue(order)) || originalOrderValue(order)
 }
+function formatAmendedQuantity(order, value) {
+  const unit = String(order.quantity || '').includes('万') ? '万' : '股'
+  return `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${unit}`
+}
+function rebalanceSystemOrders(order, value) {
+  const lines = (order.systemOrders || []).filter(line => line.orderStatus !== '已撤单')
+  const sourceTotal = lines.reduce((total, line) => total + Number(order.orderValueMode === 'amount' ? line.inputAmount : line.quantity || 0), 0)
+  let remaining = Number(value)
+  lines.forEach((line, index) => {
+    const isLast = index === lines.length - 1
+    const nextValue = isLast ? remaining : Number((value * (Number(order.orderValueMode === 'amount' ? line.inputAmount : line.quantity || 0) / sourceTotal)).toFixed(2))
+    remaining = Number((remaining - nextValue).toFixed(2))
+    if (order.orderValueMode === 'amount') {
+      line.inputAmount = nextValue
+      line.quantity = line.price > 0 ? Number((nextValue / line.price).toFixed(2)) : 0
+    } else {
+      line.quantity = nextValue
+    }
+    line.orderStatus = '委托中'
+  })
+}
+function completeSystemAmend(order) {
+  const value = amendedOrderValue(order)
+  if (order.amendedPrice !== undefined) order.price = Number(order.amendedPrice).toFixed(2)
+  if (order.orderValueMode === 'amount' && order.amendedAmountValue !== undefined) {
+    order.amountValue = value
+    order.amount = formatSplitValue(value, true)
+  }
+  if (order.orderValueMode !== 'amount' && order.amendedQuantityValue !== undefined) {
+    order.quantityValue = value
+    order.quantity = formatAmendedQuantity(order, value)
+  }
+  rebalanceSystemOrders(order, value)
+  order.traderOrder = { ...order.traderOrder, price: order.price, quantity: order.quantity, amount: order.amount }
+  order.status = 'amendCompleted'
+  order.hasCustomerAmendment = true
+  order.amendmentAfterTraderOrder = Boolean(order.traderOrderPlaced || order.systemOrders?.length)
+  order.processedAt = '2026-09-22 10:30:00'
+  order.remark = `${order.remark} 系统已自动完成客户改单。`
+  appendHistory(order, '系统完成改单', '风控通过后系统已自动更新客户委托。', order.processedAt)
+}
+function completeSystemCancel(order) {
+  ;(order.systemOrders || []).forEach(line => { line.orderStatus = '已撤单' })
+  order.status = 'cancelled'
+  order.canceledQuantity = toNumeric(order.quantity)
+  order.reportQuantity = 0
+  order.frozenMargin = 0
+  order.processedAt = '2026-09-22 10:32:00'
+  order.remark = `${order.remark} 系统已自动完成客户撤单。`
+  appendHistory(order, '系统完成撤单', '系统已自动撤销该客户委托及未完成上手方订单。', order.processedAt)
+}
+function failSystemAmend(order) {
+  order.status = 'amendFailed'
+  order.processedAt = '2026-09-22 10:30:00'
+  order.remark = `${order.remark} 风控校验失败，系统已直接拒绝本次改单。`
+  appendHistory(order, '系统拒绝改单', '风控校验失败，改单未进入审批流程。', order.processedAt)
+}
+function settleSystemRequests() {
+  allOrders.value.forEach(order => {
+    if (order.status === 'amendPending') completeSystemAmend(order)
+    else if (order.status === 'cancelPending') completeSystemCancel(order)
+    else if (order.status === 'riskCheckFailed') failSystemAmend(order)
+  })
+}
+watch(allOrders, settleSystemRequests, { deep: true, immediate: true })
 function approveAmend() {
   const order = activeOrder.value
   if (!order || !isAmendPending.value) return

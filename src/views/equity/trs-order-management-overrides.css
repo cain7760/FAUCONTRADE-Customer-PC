@@ -387,6 +387,18 @@
   color: #8fc5a5;
 }
 
+.trs-done-status-tag.is-amendCompleted {
+  border-color: #3b735f;
+  background: #243a32;
+  color: #8fc5a5;
+}
+
+.trs-done-status-tag.is-amendFailed {
+  border-color: #73444c;
+  background: #3d292e;
+  color: #e49aa4;
+}
+
 .trs-done-status-tag.is-orderProcessed {
   border-color: #3d6173;
   background: #22343d;
