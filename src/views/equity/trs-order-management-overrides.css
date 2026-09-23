@@ -1792,8 +1792,12 @@
 .trs-order-index-list > button .trs-index-meta, .trs-order-index-list > button .trs-index-order-no, .trs-order-index-list > button .trs-index-meta i, .trs-order-index-list > button .trs-index-order-no i, .trs-order-index-list > button.active .trs-index-meta b, .trs-order-index-list > button.active .trs-index-order-no b { color: #838c99; }
 
 /* Six customer fields are comparable at a glance in one row. */
-.trs-customer-summary > div { grid-template-columns: repeat(6, minmax(0, 1fr)); row-gap: 0; }
+.trs-customer-summary > div { box-sizing: border-box; min-height: 70px; grid-template-columns: repeat(6, minmax(0, 1fr)); row-gap: 0; }
 .trs-customer-summary .trs-numeric { font-size: 14px; }
+
+@media (max-width: 1000px) {
+  .trs-customer-summary > div { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; }
+}
 
 /* The workbench only needs the customer-facing fill price and quantity. */
 .trs-deal-grid--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
