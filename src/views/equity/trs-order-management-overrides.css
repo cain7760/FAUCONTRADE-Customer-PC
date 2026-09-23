@@ -1761,7 +1761,7 @@
 
 /* Status filtering keeps multi-selection visible without tag clutter. */
 .trs-status-filter-popper .el-select-dropdown__header {
-  padding: 6px 10px;
+  padding: 6px 10px 6px 18px;
   border-bottom: 1px solid #343941;
 }
 
