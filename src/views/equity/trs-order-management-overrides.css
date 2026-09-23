@@ -531,10 +531,23 @@
 }
 
 .trs-quick-order-drawer .el-drawer__close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
   height: 28px;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
   border-radius: 3px;
+  line-height: 1;
   color: #aeb7c2;
+}
+
+.trs-quick-order-drawer .el-drawer__close-btn .el-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .trs-quick-order-drawer .el-drawer__close-btn:hover {

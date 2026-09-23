@@ -438,6 +438,8 @@ function saveCustomerDealUpdate() {
 function placeEquityOrder() {
   const order = activeOrder.value
   if (!order || isApprovalPending.value || isOrderFullyPlaced.value) return
+  const amountMode = order.orderValueMode === 'amount'
+  const orderAmount = Number(order.amountValue ?? toNumeric(order.amount))
   emit('place-order', {
     sourceOrderId: order.id,
     symbol: {
@@ -455,9 +457,11 @@ function placeEquityOrder() {
       algorithm: 'DMA',
       type: 'limit',
       price: Number(order.price.replace(/,/g, '')),
-      quantity: Number(order.quantity.replace(/[^\d.]/g, '')),
-      quantityMode: 'quantity',
+      quantity: amountMode ? undefined : Number(order.quantity.replace(/[^\d.]/g, '')),
+      amount: amountMode ? orderAmount : undefined,
+      quantityMode: amountMode ? 'amount' : 'quantity',
       unit: order.quantity.includes('万') ? 'wan' : 'shares',
+      amountUnit: 'yuan',
       skipQuantityLimit: true,
       counterparty: order.standard === '非标' ? 'offline' : '',
       counterparties: order.standard === '非标' ? [{ label: '线下单', value: 'offline' }] : undefined,

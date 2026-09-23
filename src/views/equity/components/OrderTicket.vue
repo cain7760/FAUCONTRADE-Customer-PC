@@ -7,7 +7,7 @@ import { useDialogShortcuts } from '../../../composables/useDialogShortcuts'
 import BaseDialog from '../../../components/BaseDialog.vue'
 const props = defineProps({ instruments: Array, accounts: Array, symbol: Object, account: Object, quote: Object, paused: Boolean, closeMode: Boolean, ticketContext: Object, initialOrder: Object, counterparties: { type: Array, default: () => [] } })
 const emit = defineEmits(['select', 'account-select', 'order'])
-const executionType = ref(props.initialOrder?.executionType === 'highTouch' || props.ticketContext?.executionType === 'highTouch' ? 'highTouch' : 'lowTouch'), algorithm = ref(['POV', 'DMA'].includes(props.initialOrder?.algorithm) ? props.initialOrder.algorithm : (['POV', 'DMA'].includes(props.ticketContext?.algorithm) ? props.ticketContext.algorithm : 'DMA')), algorithmPopoverVisible = ref(false), orderType = ref(props.initialOrder?.type === 'market' ? 'market' : 'limit'), price = ref(props.initialOrder?.price), quantity = ref(props.initialOrder?.quantity), amount = ref(), quantityMode = ref(props.initialOrder?.quantityMode || 'quantity'), fraction = ref(0), note = ref(props.initialOrder?.note || '')
+const executionType = ref(props.initialOrder?.executionType === 'highTouch' || props.ticketContext?.executionType === 'highTouch' ? 'highTouch' : 'lowTouch'), algorithm = ref(['POV', 'DMA'].includes(props.initialOrder?.algorithm) ? props.initialOrder.algorithm : (['POV', 'DMA'].includes(props.ticketContext?.algorithm) ? props.ticketContext.algorithm : 'DMA')), algorithmPopoverVisible = ref(false), orderType = ref(props.initialOrder?.type === 'market' ? 'market' : 'limit'), price = ref(props.initialOrder?.price), quantity = ref(props.initialOrder?.quantity), amount = ref(props.initialOrder?.amount), quantityMode = ref(props.initialOrder?.quantityMode || 'quantity'), fraction = ref(0), note = ref(props.initialOrder?.note || '')
 const counterparty = ref(props.initialOrder?.counterparty || '')
 const povHours = ref(props.initialOrder?.algorithmParams?.hours ?? 1)
 const povMinutes = ref(props.initialOrder?.algorithmParams?.minutes ?? 0)
@@ -18,7 +18,7 @@ const draftPovMinutes = ref(povMinutes.value)
 const draftPovParticipation = ref(povParticipation.value)
 const povHourOptions = Array.from({ length: 24 }, (_, hour) => hour)
 const povMinuteOptions = Array.from({ length: 60 }, (_, minute) => minute)
-const symbolMarket = ref('ALL'), search = ref(''), unit = ref(props.initialOrder?.unit || 'shares'), amountUnit = ref('yuan'), confirming = ref(false), insufficientFunds = ref(false), quantityLimitError = ref(''), snapshot = ref(null)
+const symbolMarket = ref('ALL'), search = ref(''), unit = ref(props.initialOrder?.unit || 'shares'), amountUnit = ref(props.initialOrder?.amountUnit || 'yuan'), confirming = ref(false), insufficientFunds = ref(false), quantityLimitError = ref(''), snapshot = ref(null)
 const accountSearch = ref('')
 const instrumentSelect = ref(null), instrumentPopperWidth = ref(0)
 const quantityInputKey = ref(0)
@@ -137,24 +137,29 @@ function confirmAlgorithmConfig() {
   povParticipation.value = draftPovParticipation.value
   algorithmPopoverVisible.value = false
 }
+let applyingInitialOrder = false
 watch(() => props.symbol.code, code => { if (selectedManualInstrument.value) return; displaySymbolCode.value = code; price.value = props.symbol.price; resetOrder() })
 watch(() => props.initialOrder, value => {
   if (!value) return
+  applyingInitialOrder = true
   executionType.value = value.executionType === 'highTouch' ? 'highTouch' : 'lowTouch'
   algorithm.value = ['POV', 'DMA'].includes(value.algorithm) ? value.algorithm : 'DMA'
   orderType.value = value.type === 'market' ? 'market' : 'limit'
   price.value = value.price
   quantity.value = value.quantity
+  amount.value = value.amount
   quantityMode.value = value.quantityMode || 'quantity'
   unit.value = value.unit || 'shares'
+  amountUnit.value = value.amountUnit || 'yuan'
   note.value = value.note || ''
   counterparty.value = value.counterparty || ''
   povHours.value = value.algorithmParams?.hours ?? 1
   povMinutes.value = value.algorithmParams?.minutes ?? 0
   povParticipation.value = value.algorithmParams?.participation ?? 10
+  nextTick(() => { applyingInitialOrder = false })
 }, { deep: true })
 watch(() => props.account.id, resetOrder)
-watch([orderType, unit, quantityMode], reset)
+watch([orderType, unit, quantityMode], () => { if (!applyingInitialOrder) reset() })
 watch(executionType, () => { selectedManualInstrument.value = null; displaySymbolCode.value = props.symbol.code; search.value = ''; price.value = props.symbol.price; resetOrder() })
 watch(() => props.quote, value => { if (value && !selectedManualInstrument.value) { orderType.value = 'limit'; price.value = value.price } })
 watch(price, () => { fraction.value = 0; confirming.value = false })
