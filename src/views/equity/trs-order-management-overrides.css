@@ -467,6 +467,10 @@
   gap: 12px;
 }
 
+.trs-customer-deal-update-form {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .trs-deal-update-form label {
   display: grid;
   gap: 6px;
