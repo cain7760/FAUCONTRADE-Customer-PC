@@ -28,7 +28,13 @@ const selectedManualInstrument = ref(null)
 const manualInstrumentVisible = ref(false)
 const manualInstrumentName = ref('')
 const manualInstrumentCode = ref('')
+const manualInstrumentMarket = ref('A')
 const manualInstrumentError = ref('')
+const manualInstrumentMarketOptions = [
+  { label: 'A股', value: 'A' },
+  { label: '港股', value: 'HK' },
+  { label: '美股', value: 'US' },
+]
 const recentCodesByExecution = ref({ lowTouch: [props.symbol.code, '600036', '300750', '600519'], highTouch: [] })
 const isManualOrder = computed(() => executionType.value === 'highTouch')
 const isCustomManualInstrument = computed(() => isManualOrder.value && !!selectedManualInstrument.value?.isManual)
@@ -40,8 +46,15 @@ const lotSize = computed(() => {
   return Number.isInteger(value) && value > 0 ? value : 100
 })
 const lotSizeLabel = computed(() => lotSize.value ? `${number(lotSize.value)}股/手` : '')
-const symbols = computed(() => selectableInstruments.value.filter(p => p.market !== 'HK' && (p.isManual || symbolMarket.value === 'ALL' || ['SZ', 'SH'].includes(p.market)) && `${p.name}${p.code}`.toLowerCase().includes(search.value.toLowerCase())))
-const recentSymbols = computed(() => (recentCodesByExecution.value[executionType.value] || []).map(code => selectableInstruments.value.find(item => item.code === code)).filter(item => item?.market !== 'HK'))
+const symbols = computed(() => selectableInstruments.value.filter(p => {
+  const matchesMarket = symbolMarket.value === 'ALL'
+    ? (p.isManual || p.market !== 'HK')
+    : p.isManual
+      ? p.market === symbolMarket.value
+      : symbolMarket.value === 'A' && ['SZ', 'SH'].includes(p.market)
+  return matchesMarket && `${p.name}${p.code}`.toLowerCase().includes(search.value.toLowerCase())
+}))
+const recentSymbols = computed(() => (recentCodesByExecution.value[executionType.value] || []).map(code => selectableInstruments.value.find(item => item.code === code)).filter(item => item && (item.isManual || item.market !== 'HK')))
 const filteredAccounts = computed(() => {
   const keyword = accountSearch.value.trim().toLowerCase()
   return keyword ? props.accounts.filter(item => `${item.id}${item.name}`.toLowerCase().includes(keyword)) : props.accounts
@@ -90,7 +103,7 @@ function rememberRecent(code) {
 }
 function chooseSymbol(code) {
   const instrument = selectableInstruments.value.find(item => item.code === code)
-  if (!code || instrument?.market === 'HK') return
+  if (!code || (instrument?.market === 'HK' && !instrument.isManual)) return
   displaySymbolCode.value = code
   rememberRecent(code)
   resetOrder()
@@ -106,12 +119,12 @@ function removeRecentSymbol(code) {
 }
 function clearInstrument() { displaySymbolCode.value = null; selectedManualInstrument.value = null; emit('select', null); search.value = ''; price.value = null; note.value = ''; fraction.value = 0; confirming.value = false; nextTick(() => { quantity.value = undefined; amount.value = undefined; quantityInputKey.value += 1 }) }
 function handleInstrumentVisible(visible) { if (visible) { search.value = ''; nextTick(() => { instrumentPopperWidth.value = Math.round(instrumentSelect.value?.$el?.getBoundingClientRect().width || 0) }) } }
-function openManualInstrument() { if (!isManualOrder.value) return; manualInstrumentName.value = search.value.trim(); manualInstrumentCode.value = ''; manualInstrumentError.value = ''; manualInstrumentVisible.value = true }
+function openManualInstrument() { if (!isManualOrder.value) return; manualInstrumentName.value = search.value.trim(); manualInstrumentCode.value = ''; manualInstrumentMarket.value = 'A'; manualInstrumentError.value = ''; manualInstrumentVisible.value = true }
 function saveManualInstrument() {
   const name = manualInstrumentName.value.trim()
   const code = manualInstrumentCode.value.trim()
   if (!name || !code) { manualInstrumentError.value = '请填写标的名称和代码'; return }
-  const instrument = { name, code, market: 'MANUAL', price: null, available: 0, isManual: true }
+  const instrument = { name, code, market: manualInstrumentMarket.value, price: null, available: 0, isManual: true }
   manualInstruments.value = [instrument, ...manualInstruments.value.filter(item => item.code !== code)]
   selectedManualInstrument.value = instrument
   displaySymbolCode.value = code
@@ -203,7 +216,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
     <section v-if="!closeMode" class="order-symbol-block">
       <div class="field-caption"><span>下单标的</span><div class="symbol-tags"><span>CNY</span><el-tooltip content="40% IA"><span>40% IA</span></el-tooltip></div></div>
       <div class="instrument-select-wrap"><el-select ref="instrumentSelect" v-model="displaySymbolCode" filterable :filter-method="v => search = v" @visible-change="handleInstrumentVisible" @change="chooseSymbol" :popper-style="instrumentPopperWidth ? { width: `${instrumentPopperWidth}px`, minWidth: `${instrumentPopperWidth}px` } : undefined" placeholder="搜索标的名称 / 代码" aria-label="下单标的" class="instrument-select" popper-class="variant-popper instrument-popper" placement="bottom-start" :offset="4">
-        <template #header><div class="instrument-select-header"><div v-if="recentSymbols.length" class="instrument-history"><span>搜索历史</span><div><div v-for="item in recentSymbols" :key="item.code" class="instrument-history-chip"><button type="button" class="instrument-history-select" @mousedown.prevent @click.stop="chooseRecentSymbol(item.code)">{{ item.name }}（{{ item.code }}）</button><button type="button" class="instrument-history-remove" :aria-label="`删除历史标的 ${item.name}`" title="删除" @mousedown.prevent @click.stop="removeRecentSymbol(item.code)">×</button></div></div></div><div class="instrument-market-tabs"><button v-for="item in [['ALL','全部'],['A','A股'],['HK','港股']]" :key="item[0]" type="button" :disabled="item[0] === 'HK'" :title="item[0] === 'HK' ? '本期暂不支持港股下单' : undefined" :class="{ active: symbolMarket === item[0] }" @mousedown.prevent @click="symbolMarket = item[0]">{{ item[1] }}</button></div></div></template>
+        <template #header><div class="instrument-select-header"><div v-if="recentSymbols.length" class="instrument-history"><span>搜索历史</span><div><div v-for="item in recentSymbols" :key="item.code" class="instrument-history-chip"><button type="button" class="instrument-history-select" @mousedown.prevent @click.stop="chooseRecentSymbol(item.code)">{{ item.name }}（{{ item.code }}）</button><button type="button" class="instrument-history-remove" :aria-label="`删除历史标的 ${item.name}`" title="删除" @mousedown.prevent @click.stop="removeRecentSymbol(item.code)">×</button></div></div></div><div class="instrument-market-tabs"><button v-for="item in [['ALL','全部'],['A','A股'],['HK','港股'],['US','美股']]" :key="item[0]" type="button" :class="{ active: symbolMarket === item[0] }" @mousedown.prevent @click="symbolMarket = item[0]">{{ item[1] }}</button></div></div></template>
         <template #empty><div class="instrument-empty"><template v-if="isManualOrder && search.trim()"><b>未找到匹配标的</b><span>该标的不在系统标的库中，可手动新增后用于本次手工单。</span><el-button type="primary" @mousedown.prevent @click.stop="openManualInstrument">手动新增标的</el-button></template><span v-else>暂无匹配标的</span></div></template>
         <el-option v-for="s in symbols" :key="s.code" :label="`${s.name}（${s.code}）`" :value="s.code"><span class="instrument-option-label">{{ s.name }}（{{ s.code }}）</span></el-option>
       </el-select><button v-if="displaySymbolCode" type="button" class="symbol-clear-button" aria-label="清空下单标的" title="清空下单标的" @click.stop="clearInstrument"><el-icon><CircleClose /></el-icon></button></div>
@@ -224,6 +237,6 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
     <section class="submit-block"><template v-if="closeMode"><div class="trade-buttons close-trade-buttons"><el-button class="sell-action" :disabled="!canSell" @click="preview('sell')">卖出</el-button></div><div class="cp-order-summary"><div><span>卖出</span><b>{{ shares ? `${number(shares)} 股` : '--' }}</b></div><div><span>预估金额</span><b>{{ shares ? `${money(shares * (estimatedPrice || 0))} CNY` : '--' }}</b></div><div><div class="total-heading"><span>最大可卖</span><el-tooltip content="最大可卖(名本) = 持仓均价*卖出股数（卖出股数暂不支持碎股，不满足1手按照1手处理，向下取整）" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="最大可卖说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></div><b>{{ number(maxSell) }} 股</b></div></div></template><template v-else><div class="trade-buttons"><el-button class="buy-action" :disabled="!canBuy" @click="preview('buy')">买入</el-button><el-button class="sell-action" :disabled="!canSell" @click="preview('sell')">卖出</el-button></div><template v-if="executionType === 'lowTouch'"><div class="order-totals"><div class="total-item"><span>买入预估(股)</span><b>{{ shares ? number(shares) : '--' }}</b></div><div class="total-item"><div class="total-heading"><span>卖出预估(股)</span><el-tooltip content="在数量下单模式下，为下单股数；在金额下单模式下，为订单金额/持仓均价。金额订单下的卖出，是针对剩余可卖出总名义本金比例的股数卖出，而非实际到账金额。" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="卖出预估说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></div><b>{{ shares ? number(shares) : '--' }}</b></div><div class="total-item"><span>买入金额(CNY)</span><b>{{ shares ? money(shares * (estimatedPrice || 0)) : '--' }}</b></div><div class="total-item"><div class="total-heading"><span>预估卖出金额(CNY)</span><el-tooltip content="卖出金额(预估)=卖出预估(股数)×订单价格。限价模式为预估最大回款金额；市价模式下此值仅供参考，以实际成交情况为准。" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="预估卖出金额说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></div><b>{{ shares ? money(shares * (estimatedPrice || 0)) : '--' }}</b></div></div><div class="total-notional"><div class="total-heading"><span>卖出名义本金(CNY)</span><el-tooltip content="金额模式下的卖出金额是指需要卖出的名义本金，而非实际回款金额。" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="卖出名义本金说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></div><b>{{ shares ? money(shares * (estimatedPrice || 0)) : '--' }}</b></div></template></template></section>
   </div>
   <BaseDialog v-model="confirming" :title="confirmationTitle" width="460px" align-center append-to-body class="variant-confirm order-confirm" :close-on-press-escape="false"><template v-if="snapshot"><div class="confirm-identity" :class="snapshot.side"><span>{{ snapshot.side === 'buy' ? '买入' : '卖出' }}</span><strong>{{ snapshot.name }}</strong><small>{{ snapshot.code }}</small></div><div class="confirm-key-metrics"><div><span>订单价格(CNY)</span><b>{{ snapshot.type === 'limit' ? money(snapshot.price) : '市价' }}</b></div><div><span>订单数量(股)</span><b>{{ number(snapshot.quantity) }}</b></div><div><span>预计金额(CNY)</span><b>{{ money(snapshot.estimate) }}</b></div></div><dl class="confirm-details"><dt>下单账户</dt><dd>{{ snapshot.account }}</dd><template v-if="snapshot.executionChannel"><dt>上手方</dt><dd>{{ snapshot.counterparty || '线下单' }}</dd></template><template v-if="snapshot.algorithmParams"><dt>运行时间</dt><dd>{{ snapshot.algorithmParams.hours }} 时 {{ snapshot.algorithmParams.minutes }} 分</dd><dt>市场成交占比</dt><dd>{{ snapshot.algorithmParams.participation }}%</dd></template><template v-if="snapshot.inputAmount !== null"><dt>订单金额</dt><dd>{{ money(snapshot.inputAmount) }} CNY</dd></template><dt>订单类型</dt><dd><span class="order-confirm-tag">{{ snapshot.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></dd><dt>执行算法</dt><dd><span class="order-confirm-tag">{{ snapshot.algorithm }}</span></dd><dt>订单方式</dt><dd><span class="order-confirm-tag">{{ snapshot.type === 'limit' ? '限价单' : '市价单' }}</span></dd><template v-if="snapshot.note"><dt>备注</dt><dd>{{ snapshot.note }}</dd></template></dl></template><template #footer><el-button @click="confirming = false">返回修改[Esc]</el-button><el-button type="primary" @click="submit">确认订单[Enter]</el-button></template></BaseDialog>
-  <BaseDialog v-model="manualInstrumentVisible" title="手动新增标的" width="400px" align-center append-to-body class="variant-confirm manual-instrument-dialog" :close-on-press-escape="false"><p class="manual-instrument-notice">您正在添加非标准标的，请确认标的名称和代码。</p><div class="manual-instrument-form"><label>标的名称<el-input v-model="manualInstrumentName" placeholder="请输入标的名称" /></label><label>标的代码<el-input v-model="manualInstrumentCode" placeholder="请输入标的代码" /></label><p v-if="manualInstrumentError" class="manual-instrument-error" role="alert">{{ manualInstrumentError }}</p></div><template #footer><el-button @click="manualInstrumentVisible = false">取消[Esc]</el-button><el-button type="primary" @click="saveManualInstrument">新增标的[Enter]</el-button></template></BaseDialog>
+  <BaseDialog v-model="manualInstrumentVisible" title="手动新增标的" width="400px" align-center append-to-body class="variant-confirm manual-instrument-dialog" :close-on-press-escape="false"><p class="manual-instrument-notice">您正在添加非标准标的，请确认标的名称、代码和市场。</p><div class="manual-instrument-form"><label>标的名称<el-input v-model="manualInstrumentName" placeholder="请输入标的名称" /></label><label>标的代码<el-input v-model="manualInstrumentCode" placeholder="请输入标的代码" /></label><label>所属市场<el-select v-model="manualInstrumentMarket" aria-label="所属市场" popper-class="variant-popper"><el-option v-for="item in manualInstrumentMarketOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></label><p v-if="manualInstrumentError" class="manual-instrument-error" role="alert">{{ manualInstrumentError }}</p></div><template #footer><el-button @click="manualInstrumentVisible = false">取消[Esc]</el-button><el-button type="primary" @click="saveManualInstrument">新增标的[Enter]</el-button></template></BaseDialog>
   <BaseDialog v-model="insufficientFunds" title="可用余额不足" width="380px" align-center append-to-body class="variant-confirm insufficient-funds"><div class="balance-compare"><div><span>本次买入预计需</span><b>{{ money(shares * (estimatedPrice || 0)) }}</b><small>CNY</small></div><div><span>账户可用余额</span><b>{{ money(account.cash) }}</b><small>CNY</small></div></div><p class="dim">请降低订单数量或订单价格后重试。</p><template #footer><el-button type="primary" @click="insufficientFunds = false">我知道了</el-button></template></BaseDialog>
 </template>
