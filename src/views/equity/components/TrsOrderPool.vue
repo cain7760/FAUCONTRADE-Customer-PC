@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { Refresh, RefreshLeft, Search } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import BaseDialog from '../../../components/BaseDialog.vue'
 import TrsApprovalDialog from './TrsApprovalDialog.vue'
 import TradingFilterField from './TradingFilterField.vue'
@@ -49,10 +50,11 @@ function resetFilters() {
   filters.value = { customer: '', orderNo: '', underlying: '', tradeType: '', customerCode: '', standard: '', direction: '' }
 }
 function claim(ids = selectedIds.value) {
-  if (!ids.length) return
+  const claimedCount = ids.filter(id => orders.value.some(order => order.id === id)).length
+  if (!claimedCount) return
   claimPoolOrders(ids)
   selectedIds.value = []
-  emit('open-my-orders')
+  ElMessage.success(`已成功认领${claimedCount}条订单，可在我的HT订单待办中进行处理`)
 }
 function openApproval(ids = selectedIds.value) {
   if (!ids.length) return
