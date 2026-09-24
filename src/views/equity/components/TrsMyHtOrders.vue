@@ -8,10 +8,9 @@ import ColumnConfigPopover from './ColumnConfigPopover.vue'
 import OrderHistoryDialog from './OrderHistoryDialog.vue'
 import TradingTable from './TradingTable.vue'
 import { positions } from '../fixtures'
-import { claimedHtOrders } from '../trsOrderStore'
+import { claimedHtOrders, placedTrsOrders } from '../trsOrderStore'
 
 const emit = defineEmits(['back-to-pool', 'place-order', 'deal-recorded'])
-const props = defineProps({ placedTrsOrder: Object })
 const activeView = ref('todo')
 const keyword = ref('')
 const keywordFocused = ref(false)
@@ -165,7 +164,7 @@ const orders = ref([
   { id: 'trs-007', underlying: '国证2000指数收益互换', code: '399303.SZ', customer: '恒睿资本', orderNo: 'HT202609220006', standard: '非标', status: 'orderProcessed', account: 'TRS_T2 - 自营三号', direction: '卖出', attribute: '平仓', price: '7,326.15', quantity: '45 万', amount: '4,500,000.00 CNY', submittedAt: '2026-09-22 10:12:36', remark: '与客户确认净额结算日期。', customerCode: 'CUS-002249', assets: '63,440,000.00 CNY', available: '15,720,000.00 CNY' },
   { id: 'trs-008', underlying: '中证消费50指数收益互换', code: '931139.CSI', customer: '博远基金', orderNo: 'HT202609220007', standard: '标准', status: 'feedbackPending', account: 'TRS_T1 - 自营二号', direction: '买入', attribute: '开仓', price: '4,851.63', quantity: '70 万', amount: '7,000,000.00 CNY', submittedAt: '2026-09-22 10:18:04', remark: '等待上手成交回报后向客户反馈。', customerCode: 'CUS-002376', assets: '108,920,000.00 CNY', available: '27,480,000.00 CNY' },
   { id: 'trs-009', underlying: '中债国开债收益率曲线', code: 'CGBY.CNI', customer: '合瑞投资', orderNo: 'HT202609220008', standard: '非标', status: 'amendPending', traderOrderPlaced: true, amendedQuantityValue: 90, account: 'TRS_T2 - 自营三号', direction: '卖出', attribute: '平仓', price: '2.38', quantity: '100 万', amount: '20,000,000.00 CNY', submittedAt: '2026-09-22 10:25:43', remark: '交易员已下单，客户申请调减订单数量。', customerCode: 'CUS-002451', assets: '225,600,000.00 CNY', available: '86,210,000.00 CNY', request: '客户申请将订单数量调整为 90 万。' },
-  { id: 'trs-016', underlying: '国证2000指数收益互换', code: '399303.SZ', customer: '启明资产', orderNo: 'HT202609220015', standard: '标准', status: 'riskCheckFailed', amendedQuantityValue: 90, account: 'TRS_T1 - 自营二号', direction: '买入', attribute: '开仓', price: '6,326.15', quantity: '60 万', amount: '6,000,000.00 CNY', submittedAt: '2026-09-22 10:50:42', remark: '客户申请扩大订单数量，风控校验未通过。', customerCode: 'CUS-003461', assets: '102,360,000.00 CNY', available: '29,640,000.00 CNY', request: '客户申请将订单数量增加至 90 万。' },
+  { id: 'trs-016', underlying: '国证2000指数收益互换', code: '399303.SZ', customer: '启明资产', orderNo: 'HT202609220015', standard: '标准', status: 'amendPending', riskTag: 'rejected', amendedQuantityValue: 90, account: 'TRS_T1 - 自营二号', direction: '买入', attribute: '开仓', price: '6,326.15', quantity: '60 万', amount: '6,000,000.00 CNY', submittedAt: '2026-09-22 10:50:42', remark: '客户申请扩大订单数量，风控校验未通过。', customerCode: 'CUS-003461', assets: '102,360,000.00 CNY', available: '29,640,000.00 CNY', request: '风控校验未通过，客户申请将订单数量增加至 90 万，等待交易员审核。' },
   { id: 'trs-015', underlying: '中证全指证券公司指数', code: '399975.SZ', customer: '远成资产', orderNo: 'HT202609220014', standard: '标准', status: 'approvalPending', approvalResumeStatus: 'orderPending', account: 'TRS_T0 - 自营一号', direction: '买入', attribute: '开仓', price: '1,126.48', quantity: '40 万', amount: '4,000,000.00 CNY', submittedAt: '2026-09-22 10:44:36', remark: '交易员提交大额委托审批。', customerCode: 'CUS-003284', assets: '96,500,000.00 CNY', available: '31,200,000.00 CNY', approval: { chain: '交易员 → 风控负责人 → 交易主管', remark: '单笔委托金额超过审批阈值，等待风控复核。', attachments: ['风险评估说明.pdf'], submittedAt: '2026-09-22 10:45:10' } },
   { id: 'trs-005', underlying: '中证1000指数收益互换', code: '000852.SH', customer: '远航资产', orderNo: 'HT202609210028', standard: '标准', status: 'feedbackCompleted', account: 'TRS_T0 - 自营一号', direction: '买入', attribute: '开仓', price: '6,312.70', quantity: '60 万', amount: '6,000,000.00 CNY', submittedAt: '2026-09-21 15:14:28', remark: '已完成客户成交反馈。', customerCode: 'CUS-000946', assets: '188,400,000.00 CNY', available: '62,150,000.00 CNY' },
   { id: 'trs-010', underlying: '沪深300指数收益互换', code: '000300.SH', customer: '瑞川资产', orderNo: 'HT202609210027', standard: '标准', status: 'cancelled', account: 'TRS_T1 - 自营二号', direction: '卖出', attribute: '平仓', price: '3,948.26', quantity: '90 万', amount: '9,000,000.00 CNY', submittedAt: '2026-09-21 14:48:35', remark: '委托已撤销。', customerCode: 'CUS-001697', assets: '116,200,000.00 CNY', available: '34,580,000.00 CNY' },
@@ -196,7 +195,7 @@ const orders = ref([
   }
 }))
 
-const statusLabel = { orderPending: '下单待处理', orderProcessed: '上手方待反馈', amendCompleted: '改单成功', amendFailed: '改单失败', feedbackPending: '上手方已反馈', approvalPending: '审批中', feedbackCompleted: '成交已反馈', cancelled: '已撤单', rejected: '已拒单', partialCancelled: '部成撤单' }
+const statusLabel = { orderPending: '下单待处理', orderProcessed: '上手方待反馈', amendPending: '改单待审核', amendCompleted: '改单成功', amendFailed: '改单失败', cancelPending: '撤单待审核', cancelAllocationPending: '撤单待分配', feedbackPending: '上手方已反馈', approvalPending: '审批中', feedbackCompleted: '成交已反馈', cancelled: '已撤单', rejected: '已拒单', partialCancelled: '部成撤单' }
 const doneStatusLabel = { approvalPending: '审批中', orderProcessed: '上手方待反馈', amendCompleted: '改单成功', amendFailed: '改单失败', feedbackCompleted: '已成交', cancelled: '已撤单', rejected: '已拒绝', partialCancelled: '部成撤单' }
 const doneStatusValues = Object.keys(doneStatusLabel)
 const statusValues = Object.keys(statusLabel)
@@ -232,7 +231,7 @@ const activeOrder = computed(() => filteredOrders.value.find(order => order.id =
   || allOrders.value.find(order => order.id === selectedOrderId.value)
   || allOrders.value[0])
 const emptyOrderListText = computed(() => activeView.value === 'todo' ? '未找到匹配的待办订单' : '未找到匹配的已办订单')
-watch(() => props.placedTrsOrder, payload => {
+function appendPlacedSystemOrder(payload) {
   if (!payload?.sourceOrderId || !payload.order) return
   const order = allOrders.value.find(item => item.id === payload.sourceOrderId)
   if (!order || order.systemOrders?.some(item => item.id === payload.order.id)) return
@@ -256,12 +255,12 @@ watch(() => props.placedTrsOrder, payload => {
   order.deal = createDealInfo(order)
   order.remark = `${order.remark} 已新增 1 笔上手方订单。`
   appendHistory(order, '交易员下单', '已通过快速下单新增上手方订单。')
-})
+}
+watch(placedTrsOrders, orders => orders.forEach(appendPlacedSystemOrder), { deep: true, immediate: true })
 const isApprovalPending = computed(() => activeOrder.value?.status === 'approvalPending')
 const isAmendPending = computed(() => activeOrder.value?.status === 'amendPending')
 const isCancelPending = computed(() => activeOrder.value?.status === 'cancelPending')
 const isCancelAllocationPending = computed(() => activeOrder.value?.status === 'cancelAllocationPending')
-const isRiskCheckFailed = computed(() => activeOrder.value?.status === 'riskCheckFailed')
 const isRiskRejected = computed(() => activeOrder.value?.riskTag === 'rejected')
 const isOrderPlaced = computed(() => activeOrder.value?.status === 'orderProcessed')
 const displayedDeal = computed(() => completedCustomerDeal(activeOrder.value))
@@ -469,6 +468,8 @@ function placeEquityOrder() {
     },
     initialOrder: {
       executionType: 'highTouch',
+      sourceOrderSide: order.direction === '卖出' ? 'sell' : 'buy',
+      symbolCode: order.code,
       algorithm: 'DMA',
       type: 'limit',
       price: Number(order.price.replace(/,/g, '')),
@@ -558,7 +559,7 @@ function confirmSplit() {
 }
 function openApproval() { approvalVisible.value = true }
 function submitApproval(approval) {
-  const resumeStatus = activeOrder.value.status === 'riskCheckFailed' || activeOrder.value.riskTag === 'rejected' ? 'orderPending' : activeOrder.value.status
+  const resumeStatus = activeOrder.value.status === 'riskCheckFailed' ? 'amendPending' : activeOrder.value.status
   activeOrder.value.approvalResumeStatus = resumeStatus
   activeOrder.value.status = 'approvalPending'
   activeOrder.value.approval = { ...approval, submittedAt: '2026-09-22 10:30:00' }
@@ -632,71 +633,6 @@ function amendedOrderValue(order) {
   const value = order.orderValueMode === 'amount' ? order.amendedAmountValue : order.amendedQuantityValue
   return Number(value ?? originalOrderValue(order)) || originalOrderValue(order)
 }
-function formatAmendedQuantity(order, value) {
-  const unit = String(order.quantity || '').includes('万') ? '万' : '股'
-  return `${Number(value).toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${unit}`
-}
-function rebalanceSystemOrders(order, value) {
-  const lines = (order.systemOrders || []).filter(line => line.orderStatus !== '已撤单')
-  const sourceTotal = lines.reduce((total, line) => total + Number(order.orderValueMode === 'amount' ? line.inputAmount : line.quantity || 0), 0)
-  let remaining = Number(value)
-  lines.forEach((line, index) => {
-    const isLast = index === lines.length - 1
-    const nextValue = isLast ? remaining : Number((value * (Number(order.orderValueMode === 'amount' ? line.inputAmount : line.quantity || 0) / sourceTotal)).toFixed(2))
-    remaining = Number((remaining - nextValue).toFixed(2))
-    if (order.orderValueMode === 'amount') {
-      line.inputAmount = nextValue
-      line.quantity = line.price > 0 ? Number((nextValue / line.price).toFixed(2)) : 0
-    } else {
-      line.quantity = nextValue
-    }
-    line.orderStatus = '委托中'
-  })
-}
-function completeSystemAmend(order) {
-  const value = amendedOrderValue(order)
-  if (order.amendedPrice !== undefined) order.price = Number(order.amendedPrice).toFixed(2)
-  if (order.orderValueMode === 'amount' && order.amendedAmountValue !== undefined) {
-    order.amountValue = value
-    order.amount = formatSplitValue(value, true)
-  }
-  if (order.orderValueMode !== 'amount' && order.amendedQuantityValue !== undefined) {
-    order.quantityValue = value
-    order.quantity = formatAmendedQuantity(order, value)
-  }
-  rebalanceSystemOrders(order, value)
-  order.traderOrder = { ...order.traderOrder, price: order.price, quantity: order.quantity, amount: order.amount }
-  order.status = 'amendCompleted'
-  order.hasCustomerAmendment = true
-  order.amendmentAfterTraderOrder = Boolean(order.traderOrderPlaced || order.systemOrders?.length)
-  order.processedAt = '2026-09-22 10:30:00'
-  order.remark = `${order.remark} 系统已自动完成客户改单。`
-  appendHistory(order, '系统完成改单', '风控通过后系统已自动更新客户委托。', order.processedAt)
-}
-function completeSystemCancel(order) {
-  ;(order.systemOrders || []).forEach(line => { line.orderStatus = '已撤单' })
-  order.status = 'cancelled'
-  order.canceledQuantity = toNumeric(order.quantity)
-  order.reportQuantity = 0
-  order.frozenMargin = 0
-  order.processedAt = '2026-09-22 10:32:00'
-  order.remark = `${order.remark} 系统已自动完成客户撤单。`
-  appendHistory(order, '系统完成撤单', '系统已自动撤销该客户委托及未完成上手方订单。', order.processedAt)
-}
-function failSystemAmend(order) {
-  order.status = 'amendFailed'
-  order.processedAt = '2026-09-22 10:30:00'
-  order.remark = `${order.remark} 风控校验失败，系统已直接拒绝本次改单。`
-  appendHistory(order, '系统拒绝改单', '风控校验失败，改单未进入审批流程。', order.processedAt)
-}
-function settleSystemRequests() {
-  allOrders.value.forEach(order => {
-    if (order.status === 'amendPending') completeSystemAmend(order)
-    else if (order.status === 'cancelPending') completeSystemCancel(order)
-    else if (order.status === 'riskCheckFailed') failSystemAmend(order)
-  })
-}
-watch(allOrders, settleSystemRequests, { deep: true, immediate: true })
 function approveAmend() {
   const order = activeOrder.value
   if (!order || !isAmendPending.value) return
@@ -831,7 +767,7 @@ async function refreshCustomerAccount() {
               <div><h2>下单明细</h2><span v-if="activeOrder.systemOrders?.length">已提交 {{ activeOrder.systemOrders.length }} 笔上手方订单</span></div>
               <strong v-if="activeOrder.systemOrders?.length">已拆{{ splitValueLabel }}：{{ formatSplitValue(placedOrderValue) }} / 客户订单{{ splitValueLabel }}：{{ originalSplitValueDisplay }}</strong>
             </header>
-            <TradingTable class="trs-split-details-table" :data="activeOrder.systemOrders || []" empty-text="暂无下单数据">
+            <TradingTable class="trs-split-details-table" :data="activeOrder.systemOrders || []" height="100%" empty-text="暂无下单数据">
               <el-table-column label="上手方" width="76" show-overflow-tooltip><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.counterparty" class="trs-line-edit-control" :disabled="activeOrder.standard === '非标'"><el-option v-for="option in splitCounterparties" :key="option.value" :label="option.label" :value="option.value" /></el-select><template v-else>{{ row.counterparty || '线下单' }}</template></template></el-table-column>
               <el-table-column label="算法" width="54" align="center"><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.strategy" class="trs-line-edit-control"><el-option label="DMA" value="DMA" /><el-option label="TWAP" value="TWAP" /><el-option label="POV" value="POV" /></el-select><template v-else>{{ row.strategy }}</template></template></el-table-column>
               <el-table-column label="下单账户" width="112" show-overflow-tooltip><template #default="{ row }"><el-input v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.account" class="trs-line-edit-control" /><template v-else>{{ row.account }}</template></template></el-table-column>

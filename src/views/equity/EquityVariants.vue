@@ -22,7 +22,7 @@ import TradingTable from './components/TradingTable.vue'
 import TrsMyHtOrders from './components/TrsMyHtOrders.vue'
 import TrsOrderPool from './components/TrsOrderPool.vue'
 import TrsQuickOrderWorkspace from './components/TrsQuickOrderWorkspace.vue'
-import { addManualEquityOrderToPool } from './trsOrderStore'
+import { addManualEquityOrderToPool, recordPlacedTrsOrder } from './trsOrderStore'
 
 const initialVariant = new URLSearchParams(location.search).get('layout')
 const assetUrl = name => `${import.meta.env.BASE_URL}original-icons/${name}`
@@ -134,7 +134,6 @@ const tableRefreshKey = ref(0)
 const trsPoolExportRows = ref([])
 const trsOrderTicketVisible = ref(false)
 const trsOrderRequest = ref(null)
-const placedTrsOrder = ref(null)
 const orderStatusMachine = ['已撤', '暂停', '完成', '部成', '已报', '待报', '改单中', '异常', '拒绝', '其他']
 const orderStatusOptions = orderStatusMachine.map(status => ({ label: status, value: status }))
 const demoOrderStatuses = [...orderStatusMachine, '暂停', '已报', '待报', '完成', '异常', '其他']
@@ -182,7 +181,9 @@ const tradeColumnDefaults = columnOptionsFor('trades').map(([id]) => id)
 const tradeVisibleColumnKeys = ref([...tradeColumnDefaults])
 const tradeColumnOptions = columnOptionsFor('trades')
 const { dock, collapsed, dragging, resizing, floating, start, startResize } = useTicketDock(workspace)
-dock.value = variants.find(v => v.id === variant.value).dock
+const defaultTicketDock = computed(() => variants.find(item => item.id === variant.value)?.dock || 'right')
+const isTicketLayoutModified = computed(() => collapsed.value || dock.value !== defaultTicketDock.value)
+dock.value = defaultTicketDock.value
 const account = computed(() => accounts.find(a => a.id === accountId.value))
 const passwordEmail = computed(() => account.value?.email || '')
 const chasingAccount = computed(() => accounts.find(item => item.id === chasingAccountId.value) || account.value)
@@ -250,7 +251,13 @@ const trades = computed(() => demoOrders.value
     && (appliedTradeFilters.value.orderType === 'ALL' || trade.orderType === appliedTradeFilters.value.orderType)))
 const floatStyle = computed(() => dock.value === 'floating' ? { left: `${floating.value.x}px`, top: `${floating.value.y}px`, width:`${floating.value.width}px`, height:`${floating.value.height}px` } : {})
 const exportTargetLabel = computed(() => ({ positions: '持仓', orders: '订单', trades: '成交', trsPool: 'HT请求订单' }[exportTarget.value] || '数据'))
-function chooseVariant(id) { variant.value = id; dock.value = variants.find(v => v.id === id).dock; collapsed.value = false; history.replaceState(null,'',`${location.pathname}?layout=${id}`) }
+function resetTicketLayout() {
+  dock.value = defaultTicketDock.value
+  collapsed.value = false
+  assetsCollapsed.value = false
+  floating.value = { x: 40, y: 20, width: 602, height: 620 }
+}
+function chooseVariant(id) { variant.value = id; resetTicketLayout(); history.replaceState(null,'',`${location.pathname}?layout=${id}`) }
 function openMessageCenter() { messageCenterVisible.value = true }
 function openHelpCenter() {
   if (helpCenterUrl) {
@@ -591,7 +598,7 @@ function openTrsOrderTicket(request) {
 }
 function acceptTrsOrder(order) {
   acceptOrder(order, { skipHtSync: true })
-  if (trsOrderRequest.value?.sourceOrderId) placedTrsOrder.value = { sourceOrderId: trsOrderRequest.value.sourceOrderId, order }
+  recordPlacedTrsOrder({ sourceOrderId: trsOrderRequest.value?.sourceOrderId, order })
   trsOrderRequest.value = null
   trsOrderTicketVisible.value = false
 }
@@ -824,7 +831,7 @@ onBeforeUnmount(() => {
         </nav>
       </aside>
       <TrsOrderPool v-if="activeTraderPrimary === 'swap' && activeTraderSecondary === '订单管理'" @open-my-orders="activeTraderSecondary = '我的HT订单'" @export="openTrsPoolExport" />
-      <TrsMyHtOrders v-else-if="activeTraderPrimary === 'swap' && activeTraderSecondary === '我的HT订单'" :placed-trs-order="placedTrsOrder" @back-to-pool="activeTraderSecondary = '订单管理'" @place-order="openTrsOrderTicket" @deal-recorded="recordHtDealInEquity" />
+      <TrsMyHtOrders v-else-if="activeTraderPrimary === 'swap' && activeTraderSecondary === '我的HT订单'" @back-to-pool="activeTraderSecondary = '订单管理'" @place-order="openTrsOrderTicket" @deal-recorded="recordHtDealInEquity" />
       <section v-else class="trader-center-canvas" :aria-label="activeTraderSecondary"></section>
       <el-drawer v-model="trsOrderTicketVisible" title="快速下单" direction="rtl" size="602px" :close-on-click-modal="false" :close-on-press-escape="false" class="trs-quick-order-drawer">
         <TrsQuickOrderWorkspace :instruments="trsTicketInstruments" :accounts="accounts" :symbol="trsTicketSymbol" :account="account" :paused="!systemRunning" :ticket-context="{ executionType: 'highTouch', algorithm: 'DMA' }" :initial-order="trsOrderRequest?.initialOrder" @account-select="selectTicketAccount" @select="code => { selectedCode = code }" @order="acceptTrsOrder" />
@@ -843,7 +850,7 @@ onBeforeUnmount(() => {
     </aside>
     <div ref="workspace" class="variants-workspace" :class="[`dock-${dock}`,{'ticket-collapsed':collapsed,'is-dragging':dragging}]">
       <section class="positions-pane workspace-panel">
-        <header class="positions-tabs"><button :class="{active:tab==='positions'}" @click="tab='positions'">所有持仓<span>({{ allRows.length }})</span></button><button :class="{active:tab==='orders'}" @click="tab='orders'">所有订单<span>({{ orders.length }})</span></button><button :class="{active:tab==='trades'}" @click="tab='trades'">所有成交<span>({{ trades.length }})</span></button><el-select v-model="selectedAccountIds" class="global-account-filter" multiple collapse-tags :max-collapse-tags="1" placeholder="下单账户" aria-label="全局下单账户筛选" popper-class="variant-popper global-account-popper" :offset="2" @visible-change="handleGlobalAccountVisible" @change="updateGlobalAccountSelection"><template #header><div class="account-dropdown-search" @click.stop><el-input v-model="globalAccountSearch" :prefix-icon="Search" placeholder="搜索下单账户" clearable /></div></template><el-option label="全部账户" :value="allAccountsValue" /><el-option v-for="option in filteredGlobalAccounts" :key="option.id" :label="accountLabel(option.id)" :value="option.id" /></el-select><button v-if="collapsed" class="workspace-restore-ticket" @click="collapsed=false"><img class="restore-panel-icon" :src="assetUrl('panel-expand.svg')" alt=""><span class="restore-panel-label" style="color:#9ba3af!important;font-size:12px!important">展开下单面板</span></button></header>
+        <header class="positions-tabs"><button :class="{active:tab==='positions'}" @click="tab='positions'">所有持仓<span>({{ allRows.length }})</span></button><button :class="{active:tab==='orders'}" @click="tab='orders'">所有订单<span>({{ orders.length }})</span></button><button :class="{active:tab==='trades'}" @click="tab='trades'">所有成交<span>({{ trades.length }})</span></button><el-select v-model="selectedAccountIds" class="global-account-filter" multiple collapse-tags :max-collapse-tags="1" placeholder="下单账户" aria-label="全局下单账户筛选" popper-class="variant-popper global-account-popper" :offset="2" @visible-change="handleGlobalAccountVisible" @change="updateGlobalAccountSelection"><template #header><div class="account-dropdown-search" @click.stop><el-input v-model="globalAccountSearch" :prefix-icon="Search" placeholder="搜索下单账户" clearable /></div></template><el-option label="全部账户" :value="allAccountsValue" /><el-option v-for="option in filteredGlobalAccounts" :key="option.id" :label="accountLabel(option.id)" :value="option.id" /></el-select><button v-if="collapsed" class="workspace-restore-ticket" @click="collapsed=false"><img class="restore-panel-icon" :src="assetUrl('panel-expand.svg')" alt=""><span class="restore-panel-label">展开下单面板</span></button></header>
         <template v-if="tab==='positions'">
           <div class="position-filters"><el-input v-model="query" :prefix-icon="Search" placeholder="代码 / 名称" aria-label="搜索持仓" clearable /><el-select v-model="market" aria-label="持仓市场" popper-class="variant-popper" :offset="2"><el-option label="全部市场" value="ALL"/><el-option label="深市" value="SZ"/><el-option label="沪市" value="SH"/></el-select><el-select v-model="positionType" placeholder="多空方向" aria-label="多空方向筛选" popper-class="variant-popper" :offset="2"><el-option label="全部" value="ALL"/><el-option label="多头" value="多"/><el-option label="空头" value="空"/></el-select><el-select v-model="positionOrderType" aria-label="订单类型筛选" popper-class="variant-popper" :offset="2"><el-option label="订单类型" value="ALL"/><el-option label="系统单" value="系统单"/><el-option label="手工单" value="手工单"/></el-select><el-button class="filter-query" @click="applyFilters">查询</el-button><el-button link @click="clearFilters">重置</el-button><div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新持仓" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><el-tooltip content="选择时间范围后导出当前持仓" placement="top"><button class="export-positions" aria-label="导出持仓" @click="openExport('positions')"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></el-tooltip></div></div>
           <TradingTable :key="`positions-${tableRefreshKey}`" ref="table" class="original-fields" :data="sortedRows" height="100%" :fit="false" row-key="id" empty-text="无匹配持仓，请调整或重置筛选" @row-dblclick="loadPositionIntoTicket">
@@ -960,7 +967,7 @@ onBeforeUnmount(() => {
       <section class="trade-dock" :class="{floating:dock==='floating', resizing, 'assets-collapsed':assetsCollapsed}" :style="floatStyle">
         <OrderBook v-show="!collapsed" :symbol="selected" :compact="dock === 'bottom'" @drag="start" @quote="value=>{quote=value;collapsed=false}" />
         <section v-show="!collapsed" class="ticket-pane workspace-panel">
-          <header class="module-heading drag-heading" @pointerdown="start"><span class="drag-title"><span class="drag-grip" aria-hidden="true"><i v-for="n in 8" :key="n" /></span><h2>交易订单</h2></span><button aria-label="收起交易区域" class="collapse-ticket" @pointerdown.stop @click="collapsed=true"><img :src="assetUrl('panel-collapse.svg')" alt=""></button></header>
+          <header class="module-heading drag-heading" @pointerdown="start"><span class="drag-title"><span class="drag-grip" aria-hidden="true"><i v-for="n in 8" :key="n" /></span><h2>交易订单</h2></span><span class="ticket-layout-actions"><el-tooltip v-if="isTicketLayoutModified" content="将面板重置到默认位置" placement="top" popper-class="ticket-reset-popper"><button type="button" aria-label="将面板重置到默认位置" class="reset-ticket-layout" @pointerdown.stop @click="resetTicketLayout"><svg class="reset-layout-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 2.5H2.5V6m7.5-3.5h3.5V6M10 13.5h3.5V10M6 13.5H2.5V10M5 8h6m-2.5-2.5L11 8l-2.5 2.5" /></svg></button></el-tooltip><button aria-label="收起交易区域" class="collapse-ticket" @pointerdown.stop @click="collapsed=true"><img :src="assetUrl('panel-collapse.svg')" alt=""></button></span></header>
           <OrderTicket :key="ticketResetKey" :instruments="marketInstruments" :accounts="accounts" :symbol="selected" :account="account" :quote="quote" :paused="!systemRunning" :ticket-context="ticketContext" @account-select="selectTicketAccount" @select="code=>{ selectedCode=code; if (!code) quote=null }" @order="acceptOrder" />
         </section>
         <section v-show="!collapsed" class="compact-assets ticket-assets" :class="{ 'is-collapsed': assetsCollapsed }" aria-label="账户资金"><div class="asset-summary-heading"><span>资产账户概要</span><button class="asset-visibility" type="button" :aria-label="assetsVisible ? '隐藏资金数值' : '查看资金数值'" @click="toggleAssetsVisible"><el-icon><View v-if="assetsVisible" /><Hide v-else /></el-icon></button><button class="asset-collapse" type="button" :aria-label="assetsCollapsed ? '展开资产账户概要' : '收起资产账户概要'" @click="assetsCollapsed=!assetsCollapsed"><el-icon><ArrowDownBold /></el-icon></button></div><div v-show="!assetsCollapsed" class="asset-summary-grid"><div class="asset-metric asset-available"><span>大账户可用</span><el-tooltip v-if="assetsVisible" placement="top" popper-class="asset-value-popper"><template #content><span class="asset-large-value"><template v-for="part in assetAmountParts(account.cash)" :key="`${part.value}${part.unit}`"><b>{{ part.value }}</b><i v-if="part.unit">{{ part.unit }}</i></template></span></template><b class="asset-number">{{ money(account.cash) }}</b></el-tooltip><b v-else class="asset-number">••••••••</b><small>CNY</small></div><div class="asset-metric"><span>大账户余额</span><el-tooltip v-if="assetsVisible" placement="top" popper-class="asset-value-popper"><template #content><span class="asset-large-value"><template v-for="part in assetAmountParts(accountBalance)" :key="`${part.value}${part.unit}`"><b>{{ part.value }}</b><i v-if="part.unit">{{ part.unit }}</i></template></span></template><b class="asset-number">{{ money(accountBalance) }}</b></el-tooltip><b v-else class="asset-number">••••••••</b><small>CNY</small></div></div></section>

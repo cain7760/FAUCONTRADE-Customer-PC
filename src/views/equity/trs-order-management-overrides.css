@@ -274,13 +274,16 @@
 
 .trs-done-filters .el-input__wrapper,
 .trs-done-filters .el-select__wrapper {
+  height: 28px;
   min-height: 28px;
+  box-sizing: border-box;
   background: #191b1e;
   box-shadow: 0 0 0 1px #363a40 inset;
 }
 
 .trs-done-filters > button {
   height: 28px;
+  box-sizing: border-box;
   padding: 0 10px;
   border: 1px solid #53606d;
   border-radius: 3px;
@@ -1602,7 +1605,11 @@
 
 /* Submitted split orders remain visible as a read-only detail table. */
 .trs-split-details {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   margin: 0 8px 8px;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid #343941;
   border-radius: 3px;
@@ -1650,6 +1657,11 @@
 
 .trs-split-details-table .el-table__cell {
   height: 36px;
+}
+
+.trs-split-details-table {
+  flex: 1;
+  min-height: 0;
 }
 
 .trs-split-details-table .el-table__header .cell,

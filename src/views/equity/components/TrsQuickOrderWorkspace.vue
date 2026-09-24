@@ -22,6 +22,7 @@ const assetsCollapsed = ref(false)
 const accountBalance = computed(() => props.account.id === 'TZS_T0' ? 1000000 : 700000)
 const displayAccountCash = computed(() => props.account.cash * 10000)
 const displayAccountBalance = computed(() => accountBalance.value * 10000)
+const tradingAccount = computed(() => ({ ...props.account, cash: displayAccountCash.value }))
 const defaultCounterparties = [
   { label: '线下单', value: 'offline' },
   { label: '中金公司', value: '中金公司' },
@@ -59,7 +60,7 @@ watch(() => props.symbol?.code, () => { quote.value = null })
         <header class="module-heading">
           <h2>交易订单</h2>
         </header>
-        <OrderTicket :key="`${symbol.code}-${initialOrder?.price}-${initialOrder?.quantity}`" :instruments="instruments" :accounts="accounts" :symbol="symbol" :account="account" :quote="quote" :paused="paused" :ticket-context="ticketContext" :initial-order="initialOrder" :counterparties="counterparties" @account-select="emit('account-select', $event)" @select="selectSymbol" @order="emit('order', $event)" />
+        <OrderTicket :key="`${symbol.code}-${initialOrder?.price}-${initialOrder?.quantity}`" :instruments="instruments" :accounts="accounts" :symbol="symbol" :account="tradingAccount" :quote="quote" :paused="paused" :ticket-context="ticketContext" :initial-order="initialOrder" :counterparties="counterparties" @account-select="emit('account-select', $event)" @select="selectSymbol" @order="emit('order', $event)" />
       </section>
       <section class="compact-assets ticket-assets" :class="{ 'is-collapsed': assetsCollapsed }" aria-label="账户资金">
         <div class="asset-summary-heading"><span>资产账户概要</span><button type="button" class="asset-visibility" :aria-label="assetsVisible ? '隐藏资金数值' : '查看资金数值'" @click="assetsVisible = !assetsVisible"><el-icon><View v-if="assetsVisible" /><Hide v-else /></el-icon></button><button type="button" class="asset-collapse" :aria-label="assetsCollapsed ? '展开资产账户概要' : '收起资产账户概要'" @click="assetsCollapsed = !assetsCollapsed"><el-icon><ArrowDownBold /></el-icon></button></div>

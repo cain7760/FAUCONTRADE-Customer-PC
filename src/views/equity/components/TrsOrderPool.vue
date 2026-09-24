@@ -137,7 +137,7 @@ function refreshTable() { tableRefreshKey.value += 1 }
         <el-table-column prop="orderNo" label="订单编号" width="128" />
         <el-table-column v-if="poolStatus !== 'pending'" prop="handler" label="处理人" width="72" />
         <el-table-column v-if="poolStatus !== 'pending'" prop="processedAt" label="处理时间" width="126" />
-        <el-table-column label="操作" width="122" fixed="right" align="center" class-name="trs-pool-operation-column" label-class-name="trs-pool-operation-column"><template #default="{ row }"><div v-if="poolStatus === 'pending'" class="trs-pool-row-actions"><el-button v-if="row.riskTag === 'rejected'" link type="primary" @click="openApproval([row.id])">转审批</el-button><template v-else><el-button link type="primary" @click="claim([row.id])">处理</el-button><el-button link type="danger" @click="openReject([row.id])">拒单</el-button></template></div><el-button v-else link class="trs-pool-view" @click="openDetail(row)">查看</el-button></template></el-table-column>
+        <el-table-column label="操作" width="122" fixed="right" align="center" class-name="trs-pool-operation-column" label-class-name="trs-pool-operation-column"><template #default="{ row }"><div v-if="poolStatus === 'pending'" class="trs-pool-row-actions"><el-button link type="primary" @click="claim([row.id])">处理</el-button><el-button link type="danger" @click="openReject([row.id])">拒单</el-button></div><el-button v-else link class="trs-pool-view" @click="openDetail(row)">查看</el-button></template></el-table-column>
       </TradingTable>
     </div>
     <footer class="trs-pool-pagination"><span>共 {{ visibleOrders.length }} 条</span><el-pagination small background layout="prev, pager, next" :total="visibleOrders.length" :page-size="10" /></footer>

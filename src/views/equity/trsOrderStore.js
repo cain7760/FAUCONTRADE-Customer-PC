@@ -18,21 +18,19 @@ export const poolOrders = ref([
 ])
 
 export const claimedHtOrders = ref([])
-const isSystemRequest = order => ['改单', '撤单'].includes(order.tradeType)
-const systemCompletedRequests = poolOrders.value.filter(order => order.status === 'pending' && isSystemRequest(order))
+export const placedTrsOrders = ref([])
+
+export function recordPlacedTrsOrder(payload) {
+  if (!payload?.sourceOrderId || !payload.order?.id) return
+  if (placedTrsOrders.value.some(item => item.order.id === payload.order.id)) return
+  placedTrsOrders.value.push(payload)
+}
+
 export const traderHtOrders = ref([
   ...poolOrders.value.filter(order => order.status !== 'pending').map(order => ({ ...order, id: `trader-${order.id}` })),
-  ...systemCompletedRequests.map(order => ({
-    ...order,
-    id: `trader-${order.id}`,
-    status: 'processed',
-    handler: '系统',
-    processedAt: '2026-09-22 10:08:20',
-    remark: `${order.remark || ''}${order.riskTag === 'rejected' ? ' 风控校验失败，改单已自动失败。' : ` ${order.tradeType}已由系统自动完成。`}`,
-  })),
 ])
 
-poolOrders.value = poolOrders.value.filter(order => order.status === 'pending' && !isSystemRequest(order))
+poolOrders.value = poolOrders.value.filter(order => order.status === 'pending')
 
 const claimedCustomerNames = ['Kevin_292933', 'Olivia_102484', 'Ethan_843701']
 
@@ -101,6 +99,14 @@ export function claimPoolOrders(ids) {
 
   claimedHtOrders.value.push(...claimed.map((order, index) => {
     const holding = positions[(claimedHtOrders.value.length + index) % positions.length]
+    const reviewStatus = order.tradeType === '改单' ? 'amendPending' : order.tradeType === '撤单' ? 'cancelPending' : 'orderPending'
+    const reviewRequest = order.tradeType === '改单'
+      ? order.riskTag === 'rejected'
+        ? '风控校验未通过，客户申请改单，等待交易员审核。'
+        : '客户申请改单，等待交易员审核。'
+      : order.tradeType === '撤单'
+        ? '客户申请撤单，等待交易员审核。'
+        : undefined
     return {
       ...order,
       id: `claimed-${order.id}`,
@@ -109,8 +115,9 @@ export function claimPoolOrders(ids) {
       underlying: holding.name,
       code: `${holding.code}.${holding.market}`,
       price: holding.price.toFixed(2),
-      status: 'orderPending',
-      remark: '已从订单池认领，等待交易员处理。',
+      status: reviewStatus,
+      request: reviewRequest,
+      remark: reviewRequest || '已从订单池认领，等待交易员处理。',
       history: [{ label: '订单认领', at: '2026-09-22 10:08:20', detail: '交易员已从订单池认领。' }],
       assets: '128,560,000.00 CNY',
       available: '46,250,000.00 CNY',
