@@ -16,6 +16,21 @@
   gap: 5px;
 }
 
+/* Keep inputs and selects aligned in both the default and expanded filter rows. */
+.trs-pool-filter .trading-filter-field > .el-input,
+.trs-pool-filter .trading-filter-field > .el-select {
+  height: 28px !important;
+}
+
+.trs-pool-filter .trading-filter-field .el-input__wrapper,
+.trs-pool-filter .trading-filter-field .el-select__wrapper {
+  box-sizing: border-box;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .trs-pool-toolbar {
   background: #1e2023;
   border-bottom: 0;
