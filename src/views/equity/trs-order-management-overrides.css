@@ -1,6 +1,11 @@
-.trs-status-tag.is-feedbackPending {
-  background: #35443f;
-  color: #9fd0b4;
+.trs-status-tag.is-dealAllocationPending {
+  background: #263d4b;
+  color: #94cce6;
+}
+
+.trs-status-tag.is-exceptionPending {
+  background: #4a3034;
+  color: #e5a4ad;
 }
 
 /* TRS 复用权益交易的筛选、工具栏及表格节奏；不再维护页面私有变体。 */
@@ -405,6 +410,12 @@
   color: #8fc5a5;
 }
 
+.trs-done-status-tag.is-exceptionClosed {
+  border-color: #73444c;
+  background: #3d292e;
+  color: #e49aa4;
+}
+
 .trs-done-status-tag.is-amendCompleted {
   border-color: #3b735f;
   background: #243a32;
@@ -531,6 +542,94 @@
 
 .trs-deal-actions button:hover {
   border-color: #665638;
+  color: #dfc890;
+}
+
+.trs-deal-actions button.is-unavailable,
+.trs-deal-actions button.is-unavailable:hover {
+  border-color: #3b4149;
+  background: #25282d;
+  color: #69727e;
+  cursor: not-allowed;
+}
+
+.trs-deal-add-record {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #d5bc85;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.trs-deal-add-record:hover {
+  color: #dfc890;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.trs-deal-add-record.is-unavailable,
+.trs-deal-add-record.is-unavailable:hover {
+  color: #69727e;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.trs-customer-deal-editor {
+  display: grid;
+  gap: 8px;
+  padding: 14px 12px;
+}
+
+.trs-customer-deal-editor-head,
+.trs-customer-deal-editor-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, .9fr) minmax(0, .9fr) 28px;
+  gap: 6px;
+  align-items: center;
+}
+
+.trs-customer-deal-editor-head {
+  color: #8d96a2;
+  font-size: 10px;
+}
+
+.trs-customer-deal-editor-head i {
+  margin-left: 2px;
+  color: #e49aa4;
+  font-style: normal;
+}
+
+.trs-customer-deal-editor-row .el-input__wrapper {
+  min-height: 28px;
+  background: #191b1e;
+  box-shadow: 0 0 0 1px #3b4149 inset;
+}
+
+.trs-deal-record-remove {
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e49aa4;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.trs-deal-record-remove:disabled {
+  color: #606873;
+  cursor: not-allowed;
+}
+
+.trs-deal-actions.is-editing {
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.trs-deal-actions .is-primary {
+  border-color: #665638;
+  background: #302c24;
   color: #dfc890;
 }
 
@@ -709,6 +808,25 @@
 
 .algorithm-menu-actions .el-button {
   min-width: 52px;
+}
+
+.algorithm-menu-actions .el-button:not(.el-button--primary) {
+  --el-button-bg-color: #272b31;
+  --el-button-border-color: #4b535e;
+  --el-button-text-color: #c9d0d9;
+  --el-button-hover-bg-color: #343941;
+  --el-button-hover-border-color: #687382;
+  --el-button-hover-text-color: #e1e6ed;
+  background: #272b31;
+  border-color: #4b535e;
+  color: #c9d0d9;
+}
+
+.algorithm-menu-actions .el-button:not(.el-button--primary):hover,
+.algorithm-menu-actions .el-button:not(.el-button--primary):focus-visible {
+  background: #343941;
+  border-color: #687382;
+  color: #e1e6ed;
 }
 
 @media (max-width: 620px) {
@@ -1107,6 +1225,10 @@
   gap: 7px;
 }
 
+.trs-customer-refresh > span {
+  display: none;
+}
+
 .trs-customer-refresh button {
   display: inline-flex;
   align-items: center;
@@ -1124,6 +1246,17 @@
 .trs-customer-refresh button:hover:not(:disabled) {
   background: #2c3036;
   color: #e8eaed;
+}
+
+.trs-customer-refresh .trs-return-order-pool {
+  border-color: #53606d;
+  color: #cbd2dc;
+}
+
+.trs-customer-refresh .trs-return-order-pool:hover {
+  border-color: #665638;
+  background: #302c24;
+  color: #dfc890;
 }
 
 .trs-customer-refresh button:disabled {
@@ -1251,10 +1384,45 @@
   color: #e5a4ad;
 }
 
-.trs-order-index-list > button .trs-status-tag.is-feedbackPending {
-  border-color: #426a56;
-  background: #35443f;
-  color: #9fd0b4;
+.trs-order-index-list > button .trs-status-tag.is-dealAllocationPending {
+  border-color: #39677d;
+  background: #263d4b;
+  color: #94cce6;
+}
+
+.trs-order-index-list > button .trs-status-tag.is-exceptionPending {
+  border-color: #70474d;
+  background: #4a3034;
+  color: #e5a4ad;
+}
+
+/* Keep alternate completed-worklist tags visually identical to the pending list. */
+.trs-order-index-list > button .trs-status-tag.is-feedbackCompleted,
+.trs-order-index-list > button .trs-status-tag.is-amendCompleted {
+  border-color: #3b735f;
+  background: #243a32;
+  color: #8fc5a5;
+}
+
+.trs-order-index-list > button .trs-status-tag.is-approvalPending,
+.trs-order-index-list > button .trs-status-tag.is-cancelled {
+  border-color: #6f5b35;
+  background: #373025;
+  color: #d8bc78;
+}
+
+.trs-order-index-list > button .trs-status-tag.is-rejected,
+.trs-order-index-list > button .trs-status-tag.is-amendFailed,
+.trs-order-index-list > button .trs-status-tag.is-exceptionClosed {
+  border-color: #73444c;
+  background: #3d292e;
+  color: #e49aa4;
+}
+
+.trs-order-index-list > button .trs-status-tag.is-partialCancelled {
+  border-color: #6c5744;
+  background: #3a3028;
+  color: #d7a982;
 }
 
 .trs-order-index-list > button .trs-index-meta {
@@ -1356,7 +1524,22 @@
 }
 
 .trs-summary-actions .is-danger {
+  order: 1;
   margin-left: 0;
+  border-color: #a95360;
+  background: #8b424d;
+  color: #fff;
+}
+
+.trs-summary-actions .is-danger:hover {
+  border-color: #bd6571;
+  background: #9b4b57;
+  color: #fff;
+}
+
+/* Approval is the secondary escape hatch, after confirm or reject. */
+.trs-summary-actions > button:nth-child(2) {
+  order: 2;
 }
 
 .trs-summary-actions button:disabled {
@@ -1365,6 +1548,30 @@
   color: #6f7782;
   cursor: not-allowed;
   opacity: .6;
+}
+
+.trs-summary-actions .is-place-order:not(:disabled) {
+  border-color: #bb984a;
+  background: #bb984a;
+  color: #fff;
+}
+
+.trs-summary-actions .is-place-order:not(:disabled):hover {
+  border-color: #c8a757;
+  background: #c8a757;
+  color: #fff;
+}
+
+.trs-summary-actions > button:first-child:not(:disabled) {
+  border-color: #bb984a;
+  background: #bb984a;
+  color: #fff;
+}
+
+.trs-summary-actions > button:first-child:not(:disabled):hover {
+  border-color: #c8a757;
+  background: #c8a757;
+  color: #fff;
 }
 
 .trs-order-index > header > .trs-pending-count {
@@ -1846,6 +2053,58 @@
 .trs-order-keyword .trs-order-search-action:hover, .trs-order-keyword .trs-order-search-action:focus-visible { background: #30343a; color: #dfc890; outline: 0; }
 .trs-order-keyword .trs-order-search-action .el-icon { font-size: 14px; }
 
+/* The order-list search and status selector share one fixed control height. */
+.trs-order-index-filters .el-input,
+.trs-order-index-filters .el-select {
+  --el-component-size: 28px;
+  height: 28px;
+}
+
+.trs-order-index-filters .el-input__wrapper,
+.trs-order-index-filters .el-select__wrapper {
+  min-height: 28px;
+  height: 28px;
+}
+
+/* Element Plus gives inputs and selects different default box models; pin both layers. */
+.trs-order-index-filters > .el-input,
+.trs-order-index-filters > .el-select,
+.trs-order-index-filters > .el-input .el-input__wrapper,
+.trs-order-index-filters > .el-select .el-select__wrapper {
+  box-sizing: border-box;
+  min-height: 28px !important;
+  height: 28px !important;
+}
+
+.trs-order-index-filters > .el-input .el-input__inner {
+  height: 26px;
+  line-height: 26px;
+}
+
+/* Prioritize order lookup while keeping the status filter immediately available. */
+.trs-order-index-filters {
+  grid-template-columns: minmax(120px, 1fr) 72px;
+  align-items: center;
+  gap: 8px;
+}
+
+.trs-order-index-filters > .el-input,
+.trs-order-index-filters > .el-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.trs-order-keyword .el-input__inner {
+  width: 120px !important;
+}
+
+/* Make the standard-order identifier distinct from the non-standard teal tag. */
+.trs-my-orders .trs-type-tag:not(.is-nonstandard) {
+  background: #263b50;
+  color: #96c9eb;
+  box-shadow: inset 0 0 0 1px #3a6280;
+}
+
 /* Code, customer and order-number copy shares the customer-card field tone. */
 .trs-order-index-list > button .trs-index-meta, .trs-order-index-list > button .trs-index-order-no, .trs-order-index-list > button .trs-index-meta i, .trs-order-index-list > button .trs-index-order-no i, .trs-order-index-list > button.active .trs-index-meta b, .trs-order-index-list > button.active .trs-index-order-no b { color: #838c99; }
 
@@ -1857,5 +2116,5 @@
   .trs-customer-summary > div { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; }
 }
 
-/* The workbench only needs the customer-facing fill price and quantity. */
-.trs-deal-grid--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+/* Read-only deal data follows the same three-field order as the editor. */
+.trs-deal-grid--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }

@@ -834,7 +834,7 @@ onBeforeUnmount(() => {
       <TrsMyHtOrders v-else-if="activeTraderPrimary === 'swap' && activeTraderSecondary === '我的HT订单'" @back-to-pool="activeTraderSecondary = '订单管理'" @place-order="openTrsOrderTicket" @deal-recorded="recordHtDealInEquity" />
       <section v-else class="trader-center-canvas" :aria-label="activeTraderSecondary"></section>
       <el-drawer v-model="trsOrderTicketVisible" title="快速下单" direction="rtl" size="602px" :close-on-click-modal="false" :close-on-press-escape="false" class="trs-quick-order-drawer">
-        <TrsQuickOrderWorkspace :instruments="trsTicketInstruments" :accounts="accounts" :symbol="trsTicketSymbol" :account="account" :paused="!systemRunning" :ticket-context="{ executionType: 'highTouch', algorithm: 'DMA' }" :initial-order="trsOrderRequest?.initialOrder" @account-select="selectTicketAccount" @select="code => { selectedCode = code }" @order="acceptTrsOrder" />
+        <TrsQuickOrderWorkspace :instruments="trsTicketInstruments" :accounts="accounts" :symbol="trsTicketSymbol" :account="account" :paused="!systemRunning" :ticket-context="{ executionType: 'highTouch', algorithm: 'POV' }" :initial-order="trsOrderRequest?.initialOrder" @account-select="selectTicketAccount" @select="code => { selectedCode = code }" @order="acceptTrsOrder" />
       </el-drawer>
     </section>
     <section v-else-if="isUnderDevelopment" class="development-placeholder" aria-label="功能开发中"><p>当前功能正在开发中</p></section>
@@ -1012,7 +1012,7 @@ onBeforeUnmount(() => {
       </template>
       <template #footer><el-button @click="convertManualVisible=false; conversionRemark=''">取消[Esc]</el-button><el-button type="primary" @click="confirmConvertToManual">确认转换[Enter]</el-button></template>
     </BaseDialog>
-    <BaseDialog v-model="cancelOrderVisible" width="320px" class="variant-confirm order-cancel-dialog" title="撤单确认" :teleported="false" :close-on-press-escape="false">
+    <BaseDialog v-model="cancelOrderVisible" width="360px" class="variant-confirm order-cancel-dialog" title="撤单确认" :teleported="false" :close-on-press-escape="false">
       <template v-if="cancelingOrder">
         <section class="order-cancel-summary" aria-label="待撤订单摘要">
           <header class="order-cancel-summary-head">

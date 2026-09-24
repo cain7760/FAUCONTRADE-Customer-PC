@@ -124,3 +124,32 @@ export function claimPoolOrders(ids) {
     }
   }))
 }
+
+export function returnHtOrderToPool(order) {
+  if (!order?.orderNo) return false
+  const poolOrder = {
+    id: String(order.id || '').replace(/^claimed-/, '') || `returned-${order.orderNo}`,
+    customer: order.customer,
+    customerCode: order.customerCode,
+    account: order.account,
+    tradeType: '新单',
+    standard: order.standard,
+    underlying: order.underlying,
+    code: order.code,
+    direction: order.direction,
+    attribute: order.attribute,
+    price: order.price,
+    quantity: order.quantity,
+    amount: order.amount,
+    submittedAt: order.submittedAt,
+    orderNo: order.orderNo,
+    riskTag: order.riskTag,
+    status: 'pending',
+  }
+  const existingIndex = poolOrders.value.findIndex(item => item.orderNo === order.orderNo)
+  if (existingIndex >= 0) poolOrders.value.splice(existingIndex, 1, { ...poolOrders.value[existingIndex], ...poolOrder })
+  else poolOrders.value.unshift(poolOrder)
+  claimedHtOrders.value = claimedHtOrders.value.filter(item => item.id !== order.id)
+  traderHtOrders.value = traderHtOrders.value.filter(item => item.id !== order.traderOrderId)
+  return true
+}

@@ -1,5 +1,8 @@
 // 全部为方案演示数据；各数量字段使用同一单账户口径。
-export const accounts = [{ id: 'TZS_T0', name: '自营一号', email: 'kevin.zhang@faucontrade.com', cash: 945527.41 }, { id: 'TZS_T1', name: '自营二号', email: 'trader.two@faucontrade.com', cash: 620800 }]
+export const accounts = [
+  { id: 'TZS_T0', name: '自营一号', email: 'kevin.zhang@faucontrade.com', cash: 945527.41, frameworks: [{ id: 'price-preference', name: '价格偏好' }, { id: 'liquidity-priority', name: '流动性优先' }] },
+  { id: 'TZS_T1', name: '自营二号', email: 'trader.two@faucontrade.com', cash: 620800, frameworks: [{ id: 'risk-hedge', name: '风险对冲' }, { id: 'return-enhancement', name: '收益增强' }] },
+]
 export const positions = [
   { code: '000001', name: '平安银行', market: 'SZ', price: 11.78, cost: 11.70, change: .68, qty: 9300, available: 9300 },
   { code: '002459', name: '晶澳科技', market: 'SZ', price: 6.92, cost: 7.14, change: -1.56, qty: 12500, available: 10000 },
