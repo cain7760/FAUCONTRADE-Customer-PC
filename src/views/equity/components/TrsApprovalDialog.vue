@@ -18,7 +18,7 @@ const visible = computed({
   set: value => emit('update:modelValue', value),
 })
 const isDetail = computed(() => Boolean(props.approval))
-const allowedExtensions = new Set(['doc', 'docx', 'xls', 'xlsx', 'pdf', 'png', 'jpg', 'jpeg'])
+const allowedExtensions = new Set(['pdf', 'png', 'jpg', 'jpeg'])
 
 watch(() => props.modelValue, isVisible => {
   if (!isVisible) return
@@ -33,7 +33,7 @@ function validateFile(file) {
   const exceedsSize = (file.raw?.size || 0) > 20 * 1024 * 1024
   if (allowedExtensions.has(extension) && !exceedsSize) return
   approvalFiles.value = approvalFiles.value.filter(item => item.uid !== file.uid)
-  ElMessage.error(allowedExtensions.has(extension) ? `“${file.name}”超过 20MB，请压缩或更换文件` : `“${file.name}”格式不支持，请选择 Word、Excel、PDF 或 PNG/JPG 文件`)
+  ElMessage.error(allowedExtensions.has(extension) ? `“${file.name}”超过 20MB，请压缩或更换文件` : `“${file.name}”格式不支持，请选择 PDF 或 PNG/JPG 文件`)
 }
 
 function handleFileExceed() {
@@ -72,9 +72,9 @@ function submit() {
           <el-input v-model="approvalForm.remark" type="textarea" :rows="4" maxlength="300" show-word-limit placeholder="请输入审批说明" />
         </label>
         <label class="trs-action-field">审批材料
-          <el-upload v-model:file-list="approvalFiles" class="trs-approval-upload" action="#" accept=".doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg" :auto-upload="false" :limit="8" multiple :on-change="validateFile" :on-exceed="handleFileExceed">
+          <el-upload v-model:file-list="approvalFiles" class="trs-approval-upload" action="#" accept=".pdf,.png,.jpg,.jpeg" :auto-upload="false" :limit="8" multiple :on-change="validateFile" :on-exceed="handleFileExceed">
             <el-button plain :icon="Upload">选择文件</el-button>
-            <template #tip><span class="trs-approval-upload-tip">支持 Word、Excel、PDF、PNG/JPG；单个文件不超过 20MB，最多 8 个。</span></template>
+            <template #tip><span class="trs-approval-upload-tip">支持 PDF、PNG/JPG；单个文件不超过 20MB，最多 8 个。</span></template>
           </el-upload>
         </label>
         <p v-if="approvalError" class="trs-action-validation is-error">{{ approvalError }}</p>

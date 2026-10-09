@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, Box, RefreshRight, Search } from '@element-plus/icons-vue'
+import { ArrowLeft, RefreshRight, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import BaseDialog from '../../../components/BaseDialog.vue'
 import TrsApprovalDialog from './TrsApprovalDialog.vue'
@@ -8,7 +8,7 @@ import ColumnConfigPopover from './ColumnConfigPopover.vue'
 import OrderHistoryDialog from './OrderHistoryDialog.vue'
 import TradingTable from './TradingTable.vue'
 import { positions } from '../fixtures'
-import { claimedHtOrders, placedTrsOrders, returnHtOrderToPool } from '../trsOrderStore'
+import { claimedHtOrders, placedTrsOrders } from '../trsOrderStore'
 
 const emit = defineEmits(['back-to-pool', 'place-order', 'deal-recorded'])
 const activeView = ref('todo')
@@ -34,7 +34,6 @@ const approvalVisible = ref(false)
 const rejectVisible = ref(false)
 const approvalConfirmVisible = ref(false)
 const approvalConfirmType = ref('')
-const returnToPoolConfirmVisible = ref(false)
 const lineCancelVisible = ref(false)
 const lineToCancel = ref(null)
 const editingSystemOrderId = ref(null)
@@ -107,9 +106,18 @@ function doneOrderOutputValue(order) {
   if (order?.orderValueMode === 'amount') return dealQuantityLabel(order, order.price) || '--'
   return order?.amount || '--'
 }
-function doneSystemOrderValue(order, formatter) {
+function doneSystemOrderValue(order, formatter, separator = '、') {
   const values = (order?.systemOrders || []).map(formatter).filter(value => value !== undefined && value !== null && value !== '')
-  return values.length ? values.join('、') : '--'
+  return values.length ? values.join(separator) : '--'
+}
+function doneSystemOrderStatus(order) {
+  const statuses = (order?.systemOrders || []).map(line => line.orderStatus).filter(Boolean)
+  if (!statuses.length) return '--'
+  if (statuses.some(status => ['异常', '撤单失败'].includes(status))) return '异常'
+  if (statuses.includes('委托中')) return '委托中'
+  if (statuses.every(status => status === '已成交')) return '已成交'
+  if (statuses.every(status => status === '已撤单')) return '已撤单'
+  return statuses[0]
 }
 function doneSystemOrderPrice(line) {
   const price = Number(line?.price)
@@ -337,7 +345,7 @@ function appendPlacedSystemOrder(payload) {
   order.remark = `${order.remark} 已新增 1 笔上手方订单。`
   appendHistory(order, '交易员下单', '已通过快速下单新增上手方订单，订单已转入已办并等待上手方反馈。')
   if (shouldRevealDoneOrder) {
-    activeView.value = 'done'
+    activeView.value = 'doneAlternative'
     selectedOrderId.value = order.id
   }
 }
@@ -628,18 +636,6 @@ function placeEquityOrder() {
   })
 }
 
-function requestReturnToPool() {
-  if (activeOrder.value?.status === 'orderPending') returnToPoolConfirmVisible.value = true
-}
-function returnActiveOrderToPool() {
-  const order = activeOrder.value
-  if (!order || order.status !== 'orderPending' || !returnHtOrderToPool(order)) return
-  const orderIndex = orders.value.findIndex(item => item.id === order.id)
-  if (orderIndex >= 0) orders.value.splice(orderIndex, 1)
-  selectedOrderId.value = null
-  returnToPoolConfirmVisible.value = false
-  ElMessage.success('订单已退回订单池')
-}
 function createSplitLine(value = null) {
   const order = activeOrder.value
   return {
@@ -714,21 +710,20 @@ function confirmSplit() {
 }
 function openApproval() { approvalVisible.value = true }
 function submitApproval(approval) {
-  const resumeStatus = activeOrder.value.status === 'riskCheckFailed' ? 'amendPending' : activeOrder.value.status
-  activeOrder.value.approvalResumeStatus = resumeStatus
-  activeOrder.value.status = 'approvalPending'
-  activeOrder.value.approval = { ...approval, submittedAt: '2026-09-22 10:30:00' }
-  appendHistory(activeOrder.value, '发起转审批', '已提交审批流，等待审批结果。')
+  const order = activeOrder.value
+  const resumeStatus = order.status === 'riskCheckFailed' ? 'amendPending' : order.status
+  order.approvalResumeStatus = resumeStatus
+  order.status = 'approvalPending'
+  order.approval = { ...approval, submittedAt: '2026-09-22 10:30:00' }
+  const approvalDetail = [
+    order.approval.chain && `审批流：${order.approval.chain}`,
+    order.approval.remark && `审批说明：${order.approval.remark}`,
+  ].filter(Boolean).join('；')
+  appendHistory(order, '发起转审批', approvalDetail || '已提交审批流，等待审批结果。', order.approval.submittedAt)
   splitVisible.value = false
   approvalVisible.value = false
-}
-function approvePendingOrder(order) {
-  if (order.status !== 'approvalPending') return
-  order.status = order.approvalResumeStatus || 'orderPending'
-  if (order.riskTag === 'rejected') order.riskTag = 'approved'
-  order.approval = { ...order.approval, status: 'approved', approvedAt: '2026-09-22 10:36:00' }
-  appendHistory(order, '审批通过', '审批已通过，订单已返回待办继续处理。', order.approval.approvedAt)
-  ElMessage.success('审批已通过，订单已返回待办')
+  activeView.value = 'done'
+  selectedOrderId.value = order.id
 }
 function openApprovalConfirm(type) {
   if ((type === 'amend' && !isAmendPending.value) || (type === 'cancel' && !isCancelPending.value)) return
@@ -847,6 +842,8 @@ function confirmReject() {
     order.status = 'rejected'
     order.rejectionReason = rejectionReason.value.trim()
     order.processedAt = '2026-09-22 10:32:00'
+    order.remark = `${order.remark} 已拒单：${order.rejectionReason}。`
+    appendHistory(order, '拒绝订单', `拒单原因：${order.rejectionReason}`, order.processedAt)
     ElMessage.success('订单已拒绝')
   }
   rejectVisible.value = false
@@ -875,13 +872,16 @@ async function refreshCustomerAccount() {
       <template v-if="activeOrder">
       <div class="trs-my-orders-workspace">
         <aside class="trs-order-index" aria-label="HT订单索引">
-          <header><h2>订单列表</h2><span class="trs-pending-count" :aria-label="`${isDoneAlternative ? '已办' : '待处理'}订单 ${filteredOrders.length} 笔`"><i>{{ isDoneAlternative ? '已办' : '待处理' }}</i><b>{{ filteredOrders.length }}</b></span></header>
-          <div class="trs-order-index-filters">
-            <el-input v-model="keyword" class="trs-order-keyword" :prefix-icon="keywordFocused ? undefined : Search" placeholder="标的/客户名/订单编号" clearable @focus="keywordFocused = true" @blur="keywordFocused = false" @keyup.enter="searchOrders"><template v-if="keywordFocused" #suffix><button type="button" class="trs-order-search-action" aria-label="搜索订单" @mousedown.prevent @click="searchOrders"><el-icon><Search /></el-icon></button></template></el-input>
-            <el-select v-model="statusFilter" multiple collapse-tags collapse-tags-tooltip clearable placeholder="全部状态" aria-label="订单状态筛选" popper-class="variant-popper trs-status-filter-popper">
+          <header>
+            <h2>订单列表</h2>
+            <el-select v-model="statusFilter" multiple clearable placeholder="全部" aria-label="订单状态筛选" popper-class="variant-popper trs-status-filter-popper">
+              <template #tag="{ data }"><span v-if="data.length" class="trs-status-filter-summary">{{ data.length === worklistStatusValues.length ? '全部' : `已选 ${data.length}` }}</span></template>
               <template #header><el-checkbox :model-value="allStatusesSelected" :indeterminate="statusSelectionIndeterminate" @change="toggleAllStatuses">全部状态</el-checkbox></template>
               <el-option v-for="(label, value) in worklistStatusLabel" :key="value" :label="label" :value="value"><el-checkbox :model-value="statusFilter.includes(value)">{{ label }}</el-checkbox></el-option>
             </el-select>
+          </header>
+          <div class="trs-order-index-filters">
+            <el-input v-model="keyword" class="trs-order-keyword" :prefix-icon="keywordFocused ? undefined : Search" placeholder="标的/客户名/订单编号" clearable @focus="keywordFocused = true" @blur="keywordFocused = false" @keyup.enter="searchOrders"><template v-if="keywordFocused" #suffix><button type="button" class="trs-order-search-action" aria-label="搜索订单" @mousedown.prevent @click="searchOrders"><el-icon><Search /></el-icon></button></template></el-input>
           </div>
           <nav class="trs-order-index-list" aria-label="选择订单">
             <button v-for="order in filteredOrders" :key="order.id" type="button" :class="{ active: order.id === activeOrder.id }" :aria-current="order.id === activeOrder.id ? 'true' : undefined" @click="selectOrder(order.id)">
@@ -901,7 +901,7 @@ async function refreshCustomerAccount() {
             <ol class="trs-order-progress" aria-label="订单处理进度"><li v-for="step in progressSteps" :key="step.id" :class="{ complete: step.complete }">{{ step.label }}</li></ol>
           </header>
 
-          <section class="trs-customer-summary"><header><h3>客户信息</h3><div class="trs-customer-refresh"><span>{{ customerRefreshTime }}</span><button v-if="activeOrder.status === 'orderPending'" type="button" class="trs-return-order-pool" @click="requestReturnToPool"><el-icon><Box /></el-icon>退回订单池</button><button type="button" :disabled="customerRefreshing" aria-label="刷新客户账户信息" @click="refreshCustomerAccount"><el-icon :class="{ 'is-refreshing': customerRefreshing }"><RefreshRight /></el-icon>刷新</button></div></header><div><dl><dt>客户名</dt><dd>{{ activeOrder.customer }}</dd></dl><dl><dt>客户编号</dt><dd>{{ activeOrder.customerCode }}</dd></dl><dl><dt>客户框架</dt><dd>{{ customerFrameworkLabel }}</dd></dl><dl><dt>交易账户</dt><dd>{{ activeOrder.account }}</dd></dl><dl><dt>当前总资产(CNY)</dt><dd class="trs-numeric">{{ currencyValue(activeOrder.assets) }}</dd></dl><dl><dt>账户可用(CNY)</dt><dd class="trs-numeric">{{ currencyValue(activeOrder.available) }}</dd></dl></div></section>
+          <section class="trs-customer-summary"><header><h3>客户信息</h3><div class="trs-customer-refresh"><span>{{ customerRefreshTime }}</span><button type="button" :disabled="customerRefreshing" aria-label="刷新客户账户信息" @click="refreshCustomerAccount"><el-icon :class="{ 'is-refreshing': customerRefreshing }"><RefreshRight /></el-icon>刷新</button></div></header><div><dl><dt>客户名</dt><dd>{{ activeOrder.customer }}</dd></dl><dl><dt>客户编号</dt><dd>{{ activeOrder.customerCode }}</dd></dl><dl><dt>客户框架</dt><dd>{{ customerFrameworkLabel }}</dd></dl><dl><dt>交易账户</dt><dd>{{ activeOrder.account }}</dd></dl><dl><dt>当前总资产(CNY)</dt><dd class="trs-numeric">{{ currencyValue(activeOrder.assets) }}</dd></dl><dl><dt>账户可用(CNY)</dt><dd class="trs-numeric">{{ currencyValue(activeOrder.available) }}</dd></dl></div></section>
 
           <div class="trs-summary-panels">
             <section class="trs-summary-panel"><header><h3>客户下单信息</h3><button type="button" class="trs-order-history-trigger" @click="openOrderHistory(activeOrder)">历史记录</button></header><div class="trs-description-scroll"><table><tbody><tr><th>交易类型</th><td>新单</td><th>标的物</th><td>{{ `${activeOrder.underlying}（${activeOrder.code?.split('.')[0] || '--'}）` }}</td></tr><tr><th>方向</th><td>{{ activeOrder.direction }}</td><th>订单属性</th><td>{{ activeOrder.attribute }}</td></tr><tr><th>订单价格</th><td class="trs-numeric">{{ activeOrder.price }}</td><th>{{ splitInputLabel }}</th><td class="trs-numeric">{{ isAmountOrder ? activeOrder.amount : activeOrder.quantity }}</td></tr><tr><th>{{ isAmountOrder ? '预估数量' : '下单金额' }}</th><td class="trs-numeric">{{ isAmountOrder ? activeOrder.quantity : activeOrder.amount }}</td><th>提交时间</th><td>{{ activeOrder.submittedAt }}</td></tr><tr><th>备注</th><td colspan="3">{{ activeOrder.remark }}</td></tr><tr v-if="activeOrder.request"><th>客户请求</th><td colspan="3">{{ activeOrder.request }}</td></tr><tr v-if="activeOrder.approval"><th>审批状态</th><td colspan="3">{{ activeOrder.approval.chain }} · 审批中</td></tr><tr v-if="activeOrder.approval?.attachments?.length"><th>审批材料</th><td colspan="3">{{ activeOrder.approval.attachments.join('、') }}</td></tr></tbody></table></div><footer class="trs-summary-actions" :class="{ 'is-split-open': splitVisible }"><template v-if="isDoneAlternative"><span class="trs-summary-action-placeholder" aria-hidden="true"></span></template><template v-else-if="splitVisible"><span class="trs-summary-action-placeholder" aria-hidden="true"></span><button type="button" class="trs-collapse-split" @click="splitVisible = false">收起拆单</button></template><template v-else-if="isExceptionPending"><button type="button" @click="transferExceptionToDone">转已办</button></template><template v-else-if="isApprovalPending"><button type="button" @click="openApproval">查看审批详情</button></template><template v-else-if="isAmendPending"><button type="button" @click="openApprovalConfirm('amend')">同意</button><button type="button" @click="openApproval">转审批</button><button type="button" class="is-danger" @click="openReject">拒绝</button></template><template v-else-if="isCancelPending"><button type="button" @click="openApprovalConfirm('cancel')">同意撤单</button><button type="button" class="is-danger" @click="openReject">拒绝</button></template><template v-else-if="isCancelAllocationPending"><span class="trs-summary-action-placeholder">等待上手方撤单结果</span></template><template v-else-if="isDealAllocationPending"><span class="trs-summary-action-placeholder">上手方已成交，待分配客户成交</span></template><template v-else><button type="button" class="is-place-order" :disabled="isOrderFullyPlaced" :title="isOrderFullyPlaced ? '客户订单已全部下单' : undefined" @click="placeEquityOrder">下单</button><button v-if="activeOrder.status === 'orderPending'" type="button" @click="openApproval">转审批</button><button v-if="!isOrderPlaced" type="button" class="is-danger" @click="openReject">拒单</button></template></footer></section>
@@ -937,17 +937,17 @@ async function refreshCustomerAccount() {
               <div><h2>下单明细</h2><span v-if="activeOrder.systemOrders?.length">已提交 {{ activeOrder.systemOrders.length }} 笔上手方订单</span></div>
               <strong v-if="activeOrder.systemOrders?.length">已拆{{ splitValueLabel }}：{{ formatSplitValue(placedOrderValue) }} / 客户订单{{ splitValueLabel }}：{{ originalSplitValueDisplay }}</strong>
             </header>
-            <TradingTable class="trs-split-details-table" :data="activeOrder.systemOrders || []" height="100%" empty-text="暂无下单数据">
-              <el-table-column label="上手方" width="76" show-overflow-tooltip><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.counterparty" class="trs-line-edit-control" :disabled="activeOrder.standard === '非标'"><el-option v-for="option in splitCounterparties" :key="option.value" :label="option.label" :value="option.value" /></el-select><template v-else>{{ row.counterparty || '线下单' }}</template></template></el-table-column>
-              <el-table-column label="算法" width="54" align="center"><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.strategy" class="trs-line-edit-control"><el-option label="DMA" value="DMA" /><el-option label="TWAP" value="TWAP" /><el-option label="POV" value="POV" /></el-select><template v-else>{{ row.strategy }}</template></template></el-table-column>
-              <el-table-column label="下单账户" width="112" show-overflow-tooltip><template #default="{ row }"><el-input v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.account" class="trs-line-edit-control" /><template v-else>{{ row.account }}</template></template></el-table-column>
-              <el-table-column label="订单属性" width="64" align="center"><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.orderType" class="trs-line-edit-control"><el-option label="限价单" value="limit" /><el-option label="市价单" value="market" /></el-select><template v-else>{{ row.orderType === 'market' ? '市价单' : '限价单' }}</template></template></el-table-column>
-              <el-table-column label="订单价格" width="70" align="right"><template #default="{ row }"><el-input-number v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.price" class="trs-line-edit-control" :min="0" :precision="2" :controls="false" /><template v-else>{{ row.orderType === 'market' ? '--' : Number(row.price || 0).toFixed(2) }}</template></template></el-table-column>
-              <el-table-column :label="splitInputLabel" width="92" align="right"><template #default="{ row }"><el-input-number v-if="isEditingSystemOrder(row)" :model-value="row.orderValueMode === 'amount' ? systemOrderEditDraft.inputAmount : systemOrderEditDraft.quantity" class="trs-line-edit-control" :min="0" :precision="2" :controls="false" @update:model-value="value => row.orderValueMode === 'amount' ? systemOrderEditDraft.inputAmount = value : systemOrderEditDraft.quantity = value" /><template v-else>{{ row.orderValueMode === 'amount' ? formatSplitValue(row.inputAmount, true) : Number(row.quantity || 0).toFixed(2) }}</template></template></el-table-column>
-              <el-table-column label="成交金额" width="98" align="right" show-overflow-tooltip><template #default="{ row }"><el-input v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.deal.nominalPrincipal" class="trs-line-edit-control" /><template v-else>{{ row.deal?.nominalPrincipal || '--' }}</template></template></el-table-column>
-              <el-table-column label="成交数量" width="70" align="right"><template #default="{ row }"><el-input v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.deal.counterpartyQuantity" class="trs-line-edit-control" /><template v-else>{{ row.deal?.counterpartyQuantity || '--' }}</template></template></el-table-column>
-              <el-table-column label="方向" width="48" align="center"><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.side" class="trs-line-edit-control"><el-option label="买入" value="buy" /><el-option label="卖出" value="sell" /></el-select><template v-else>{{ row.side === 'sell' ? '卖出' : '买入' }}</template></template></el-table-column>
-              <el-table-column label="订单状态" width="64" align="center"><template #default="{ row }"><span class="trs-split-order-status" :class="{ 'is-filled': row.orderStatus === '已成交', 'is-rejected': row.orderStatus === '拒绝', 'is-exception': row.orderStatus === '异常' }">{{ row.orderStatus || '委托中' }}</span></template></el-table-column>
+            <TradingTable class="trs-split-details-table" :data="activeOrder.systemOrders || []" height="100%" :fit="false" empty-text="暂无下单数据">
+              <el-table-column label="上手方" width="100" show-overflow-tooltip><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.counterparty" class="trs-line-edit-control" :disabled="activeOrder.standard === '非标'"><el-option v-for="option in splitCounterparties" :key="option.value" :label="option.label" :value="option.value" /></el-select><template v-else>{{ row.counterparty || '线下单' }}</template></template></el-table-column>
+              <el-table-column label="算法" width="68" align="center"><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.strategy" class="trs-line-edit-control"><el-option label="DMA" value="DMA" /><el-option label="TWAP" value="TWAP" /><el-option label="POV" value="POV" /></el-select><template v-else>{{ row.strategy }}</template></template></el-table-column>
+              <el-table-column label="下单账户" width="156" show-overflow-tooltip><template #default="{ row }"><el-input v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.account" class="trs-line-edit-control" /><template v-else>{{ row.account }}</template></template></el-table-column>
+              <el-table-column label="订单属性" width="80" align="center"><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.orderType" class="trs-line-edit-control"><el-option label="限价单" value="limit" /><el-option label="市价单" value="market" /></el-select><template v-else>{{ row.orderType === 'market' ? '市价单' : '限价单' }}</template></template></el-table-column>
+              <el-table-column label="订单价格" width="80" align="right"><template #default="{ row }"><el-input-number v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.price" class="trs-line-edit-control" :min="0" :precision="2" :controls="false" /><template v-else>{{ row.orderType === 'market' ? '--' : Number(row.price || 0).toFixed(2) }}</template></template></el-table-column>
+              <el-table-column :label="splitInputLabel" width="98" align="right"><template #default="{ row }"><el-input-number v-if="isEditingSystemOrder(row)" :model-value="row.orderValueMode === 'amount' ? systemOrderEditDraft.inputAmount : systemOrderEditDraft.quantity" class="trs-line-edit-control" :min="0" :precision="2" :controls="false" @update:model-value="value => row.orderValueMode === 'amount' ? systemOrderEditDraft.inputAmount = value : systemOrderEditDraft.quantity = value" /><template v-else>{{ row.orderValueMode === 'amount' ? formatSplitValue(row.inputAmount, true) : Number(row.quantity || 0).toFixed(2) }}</template></template></el-table-column>
+              <el-table-column label="成交金额" width="144" align="right" show-overflow-tooltip><template #default="{ row }"><el-input v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.deal.nominalPrincipal" class="trs-line-edit-control" /><template v-else>{{ row.deal?.nominalPrincipal || '--' }}</template></template></el-table-column>
+              <el-table-column label="成交数量" width="100" align="right"><template #default="{ row }"><el-input v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.deal.counterpartyQuantity" class="trs-line-edit-control" /><template v-else>{{ row.deal?.counterpartyQuantity || '--' }}</template></template></el-table-column>
+              <el-table-column label="方向" width="56" align="center"><template #default="{ row }"><el-select v-if="isEditingSystemOrder(row)" v-model="systemOrderEditDraft.side" class="trs-line-edit-control"><el-option label="买入" value="buy" /><el-option label="卖出" value="sell" /></el-select><template v-else>{{ row.side === 'sell' ? '卖出' : '买入' }}</template></template></el-table-column>
+              <el-table-column label="订单状态" width="72" align="center"><template #default="{ row }"><span class="trs-split-order-status" :class="{ 'is-filled': row.orderStatus === '已成交', 'is-rejected': row.orderStatus === '拒绝', 'is-exception': row.orderStatus === '异常' }">{{ row.orderStatus || '委托中' }}</span></template></el-table-column>
               <el-table-column label="操作" width="112" align="center"><template #default="{ row }"><span class="trs-detail-row-actions"><template v-if="isEditingSystemOrder(row)"><el-button link type="primary" @click="saveSystemOrderEdit(row)">保存</el-button><el-button link @click="cancelSystemOrderEdit">取消</el-button></template><template v-else-if="isOfflineSystemOrder(row)"><el-button link type="primary" @click="editSystemOrderLine(row)">修改</el-button><el-button link type="danger" @click="removeOfflineSystemOrderLine(row)">删除</el-button></template><template v-else><el-button v-if="row.orderStatus === '异常'" link type="warning" @click="editSystemOrderLine(row)">修改数据</el-button><el-button v-if="row.orderStatus === '委托中'" link type="danger" @click="openLineCancel(row)">撤单</el-button><span v-if="!['委托中', '异常'].includes(row.orderStatus)">--</span></template></span></template></el-table-column>
             </TradingTable>
           </section>
@@ -968,7 +968,7 @@ async function refreshCustomerAccount() {
       </section>
       <div class="trs-done-batch-actions"><button type="button" class="trs-done-batch-email" :disabled="!selectedCompletedDoneOrders.length" @click="sendSelectedDoneEmails">批量发送邮件<span v-if="selectedCompletedDoneOrders.length">（{{ selectedCompletedDoneOrders.length }}）</span></button></div>
       <div class="trs-done-table-wrap">
-      <TradingTable class="trs-done-trading-table" :data="pagedDoneOrders" row-key="id" height="100%" :fit="false" empty-text="暂无已办订单" @selection-change="updateDoneSelection">
+      <TradingTable class="trs-done-trading-table" :data="pagedDoneOrders" row-key="id" height="100%" border :fit="false" empty-text="暂无已办订单" @selection-change="updateDoneSelection">
         <el-table-column type="selection" width="42" align="center" />
         <template v-for="columnKey in visibleDoneColumnKeys" :key="columnKey">
           <el-table-column v-if="columnKey === 'customerInfo'" label="客户信息">
@@ -995,11 +995,11 @@ async function refreshCustomerAccount() {
             <el-table-column label="下单账户" width="132" show-overflow-tooltip><template #default="{ row }">{{ doneSystemOrderValue(row, line => line.account || '--') }}</template></el-table-column>
             <el-table-column label="订单属性" width="76" align="center"><template #default="{ row }">{{ doneSystemOrderValue(row, line => line.orderType === 'market' ? '市价单' : '限价单') }}</template></el-table-column>
             <el-table-column label="订单价格" width="88" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderPrice) }}</template></el-table-column>
-            <el-table-column label="订单数量/金额" width="114" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderInputValue) }}</template></el-table-column>
+            <el-table-column label="订单数量/金额" width="114" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderInputValue, '/') }}</template></el-table-column>
             <el-table-column label="成交金额" width="132" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderDealAmount) }}</template></el-table-column>
             <el-table-column label="成交数量" width="110" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderDealQuantity) }}</template></el-table-column>
             <el-table-column label="方向" width="60" align="center"><template #default="{ row }">{{ doneSystemOrderValue(row, line => line.side === 'sell' ? '卖出' : '买入') }}</template></el-table-column>
-            <el-table-column label="订单状态" width="88" align="center"><template #default="{ row }">{{ doneSystemOrderValue(row, line => line.orderStatus || '--') }}</template></el-table-column>
+            <el-table-column label="订单状态" width="88" align="center"><template #default="{ row }">{{ doneSystemOrderStatus(row) }}</template></el-table-column>
           </el-table-column>
           <el-table-column v-else-if="columnKey === 'dealInfo'" label="成交信息">
             <el-table-column label="成交编号" width="148" show-overflow-tooltip><template #default="{ row }">{{ doneDealNo(row) }}</template></el-table-column>
@@ -1009,14 +1009,13 @@ async function refreshCustomerAccount() {
         </template>
         <el-table-column prop="orderNo" label="订单编号" width="154" />
         <el-table-column label="历史" width="52" align="center" header-align="center" class-name="history-column" label-class-name="history-column"><template #default="{ row }"><button type="button" class="history-view" @click.stop="openOrderHistory(row)">查看</button></template></el-table-column>
-        <el-table-column label="操作" width="154" fixed="right" align="center" header-align="center" class-name="operation-column trs-done-actions-cell" label-class-name="operation-column trs-done-actions-cell"><template #header><span class="trs-done-operation-header"><span>操作</span><ColumnConfigPopover v-model="visibleDoneColumnKeys" :options="doneColumnOptions" :defaults="doneColumnDefaults" /></span></template><template #default="{ row }"><span class="trs-done-row-actions"><el-button v-if="row.status === 'approvalPending'" link type="primary" @click="approvePendingOrder(row)">审批通过</el-button><el-button link :disabled="row.status !== 'feedbackCompleted'" @click="sendDoneEmail(row)">发送邮件</el-button><el-button v-if="row.status === 'feedbackCompleted'" link type="primary" @click="openDoneCustomerDealUpdate(row)">更新成交信息</el-button></span></template></el-table-column>
+        <el-table-column label="操作" width="154" fixed="right" :resizable="false" align="center" header-align="center" class-name="operation-column trs-done-actions-cell" label-class-name="operation-column trs-done-actions-cell"><template #header><span class="trs-done-operation-header"><span>操作</span><ColumnConfigPopover v-model="visibleDoneColumnKeys" :options="doneColumnOptions" :defaults="doneColumnDefaults" /></span></template><template #default="{ row }"><span class="trs-done-row-actions"><el-button link :disabled="row.status !== 'feedbackCompleted'" @click="sendDoneEmail(row)">发送邮件</el-button><el-button v-if="row.status === 'feedbackCompleted'" link type="primary" @click="openDoneCustomerDealUpdate(row)">更新成交信息</el-button></span></template></el-table-column>
       </TradingTable>
       </div>
       <footer class="trs-done-pagination"><span>共 {{ filteredDoneOrders.length }} 条</span><el-pagination v-model:current-page="donePage" small background layout="prev, pager, next" :total="filteredDoneOrders.length" :page-size="donePageSize" /></footer>
     </section>
 
     <TrsApprovalDialog v-model="approvalVisible" :approval="isApprovalPending ? activeOrder.approval : null" @submit="submitApproval" />
-    <BaseDialog v-model="returnToPoolConfirmVisible" title="确认退回订单池" width="420px" align-center append-to-body class="trs-action-dialog"><div class="trs-action-dialog-body"><p>确认将“{{ activeOrder?.underlying }}”退回订单池？订单将恢复为待认领状态。</p></div><template #footer><el-button @click="returnToPoolConfirmVisible = false">取消[Esc]</el-button><el-button type="primary" @click="returnActiveOrderToPool">确认退回[Enter]</el-button></template></BaseDialog>
     <BaseDialog v-model="lineCancelVisible" title="确认撤单" width="420px" align-center append-to-body class="trs-action-dialog"><div class="trs-action-dialog-body"><p>确认撤销该笔上手方订单？撤单后不可恢复。</p></div><template #footer><el-button @click="lineCancelVisible = false">取消[Esc]</el-button><el-button type="danger" @click="confirmLineCancel">确认撤单[Enter]</el-button></template></BaseDialog>
     <BaseDialog v-model="approvalConfirmVisible" :title="approvalConfirmTitle" width="420px" align-center append-to-body class="trs-action-dialog"><div class="trs-action-dialog-body"><p>{{ approvalConfirmHint }}</p></div><template #footer><el-button @click="approvalConfirmVisible = false">取消[Esc]</el-button><el-button type="primary" @click="confirmApproval">{{ approvalConfirmLabel }}[Enter]</el-button></template></BaseDialog>
     <BaseDialog v-model="rejectVisible" :title="rejectionDialogTitle" width="480px" align-center append-to-body class="trs-action-dialog"><div class="trs-action-dialog-body"><p>{{ rejectionDialogHint }}</p><label class="trs-action-field is-required">拒绝原因<el-input v-model="rejectionReason" type="textarea" :rows="4" maxlength="300" show-word-limit placeholder="请填写拒绝原因" /></label><p v-if="rejectError" class="trs-action-validation is-error">{{ rejectError }}</p></div><template #footer><el-button @click="rejectVisible = false">取消[Esc]</el-button><el-button type="danger" @click="confirmReject">{{ rejectionConfirmLabel }}[Enter]</el-button></template></BaseDialog>

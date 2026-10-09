@@ -5,10 +5,10 @@ import { money, number } from '../variantData'
 import OrderBook from './OrderBook.vue'
 import BaseDialog from '../../../components/BaseDialog.vue'
 
-const props = defineProps({ modelValue: Boolean, title: String, position: Object, account: Object })
+const props = defineProps({ modelValue: Boolean, title: String, position: Object, account: Object, hideMetrics: Boolean })
 const emit = defineEmits(['update:modelValue', 'quote'])
 const quote = ref(null)
-const marketValueWan = computed(() => ((props.position?.qty || 0) * (props.position?.price || 0) / 10000).toFixed(2))
+const marketValue = computed(() => money((props.position?.qty || 0) * (props.position?.price || 0)))
 const iaRatio = computed(() => props.position?.iaRatio ?? 40)
 function close() { emit('update:modelValue', false) }
 function updateQuote(value) { quote.value = value; emit('quote', value) }
@@ -20,7 +20,7 @@ function updateQuote(value) { quote.value = value; emit('quote', value) }
     <div v-if="position && account" class="cp-layout">
       <section class="cp-market"><OrderBook :symbol="position" :ia-ratio="iaRatio" hide-header hide-ticks @quote="updateQuote" /></section>
       <section class="cp-order">
-        <slot name="metrics"><div class="cp-metrics"><div><span>持仓股数(股)</span><b>{{ number(position.qty) }}</b></div><div><span>持仓市值(万)</span><b>{{ marketValueWan }}</b></div><div><span>可平股数(股)</span><b>{{ number(position.available) }}</b></div><div><span>成本价(CNY)</span><b>{{ money(position.cost) }}</b></div></div></slot>
+        <slot v-if="!hideMetrics" name="metrics"><div class="cp-metrics"><div><span>持仓股数(股)</span><b>{{ number(position.qty) }}</b></div><div><span>持仓市值(CNY)</span><b>{{ marketValue }}</b></div><div><span>可平股数(股)</span><b>{{ number(position.available) }}</b></div><div><span>成本价(CNY)</span><b>{{ money(position.cost) }}</b></div></div></slot>
         <slot name="order" :quote="quote" />
       </section>
     </div>

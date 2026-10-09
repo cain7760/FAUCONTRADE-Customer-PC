@@ -744,20 +744,21 @@
 .algorithm-time-select .el-select__wrapper {
   height: 28px;
   min-height: 28px;
-  padding: 0 5px;
+  padding: 0 5px 0 11px;
+  gap: 0;
   border-radius: 3px;
   background: #1f2227;
   box-shadow: 0 0 0 1px #3b3f46 inset;
 }
 
 .algorithm-time-select .el-select__selection {
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .algorithm-time-select .el-select__selected-item {
   color: #e2e6ec;
-  font-size: 11px;
-  text-align: center;
+  font-size: 12px;
+  text-align: left;
 }
 
 .algorithm-param-input i {
@@ -767,20 +768,21 @@
 }
 
 .algorithm-param-input.is-participation .el-input-number {
-  width: 54px;
+  width: 48px;
 }
 
 .algorithm-param-input.is-participation .el-input-number .el-input__wrapper {
-  min-height: 24px;
-  padding: 0 5px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 5px 0 11px;
   background: #1f2227;
   box-shadow: 0 0 0 1px #3b3f46 inset;
 }
 
 .algorithm-param-input.is-participation .el-input__inner {
   color: #e2e6ec;
-  font-size: 11px;
-  text-align: center;
+  font-size: 12px;
+  text-align: left;
 }
 
 .algorithm-param-input small {
@@ -849,12 +851,14 @@
   grid-template-columns: 294px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) 98px;
   grid-template-areas: 'book ticket' 'book assets';
-  gap: 4px;
+  column-gap: 1px;
+  row-gap: 0;
+  background: #363a40;
 }
 
-.trs-quick-order-workspace .book-pane { grid-area: book; }
-.trs-quick-order-workspace .ticket-pane { grid-area: ticket; }
-.trs-quick-order-workspace .ticket-assets { grid-area: assets; }
+.trs-quick-order-workspace .book-pane { grid-area: book; border-right: 0; border-radius: 4px 0 0 4px; }
+.trs-quick-order-workspace .ticket-pane { grid-area: ticket; border-left: 0; border-radius: 0 4px 0 0; }
+.trs-quick-order-workspace .ticket-assets { grid-area: assets; border-left: 0 !important; border-radius: 0 0 4px 0 !important; }
 .trs-quick-order-workspace .book-scroll,
 .trs-quick-order-workspace .order-form { min-height: 0; overflow: auto; }
 
@@ -875,6 +879,19 @@
   padding: 0 !important;
 }
 
+.trs-action-dialog.trs-approval-dialog.el-dialog {
+  padding: 0 !important;
+}
+
+.trs-action-dialog.trs-approval-dialog .el-dialog__header {
+  padding: 0 !important;
+}
+
+.trs-action-dialog.trs-approval-dialog .ft-dialog-default-header {
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
 .trs-action-dialog .el-dialog__footer {
   padding-bottom: 0 !important;
 }
@@ -886,7 +903,7 @@
 }
 
 .trs-approval-dialog .trs-action-dialog-body {
-  padding: 0;
+  padding: 16px;
 }
 
 .trs-action-dialog-body > p {
@@ -1574,36 +1591,6 @@
   color: #fff;
 }
 
-.trs-order-index > header > .trs-pending-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  height: 22px;
-  padding: 0 7px;
-  border: 1px solid #796638;
-  border-radius: 3px;
-  background: #3a3120;
-  color: #dfc890;
-  line-height: 20px;
-}
-
-.trs-pending-count i {
-  color: #bda66d;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 500;
-}
-
-.trs-pending-count b {
-  min-width: 14px;
-  color: #f3d789;
-  font-size: 13px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
 /* Split orders are independent form cards rather than a wide editable table. */
 .trs-summary-actions.is-split-open {
   align-items: center;
@@ -1891,13 +1878,23 @@
 
 .trs-split-details-table .trs-line-edit-control .el-input__inner {
   font-size: 11px;
+  text-align: left;
 }
 
-.trs-split-details-table.el-table,
-.trs-split-details-table .el-table__inner-wrapper,
-.trs-split-details-table .el-table__header,
-.trs-split-details-table .el-table__body {
+.trs-split-details-table .trs-line-edit-control .el-select__selection {
+  justify-content: flex-start;
+}
+
+.trs-split-details-table .trs-line-edit-control .el-select__selected-item {
+  text-align: left;
+}
+
+.trs-split-details-table.el-table {
   width: 100% !important;
+}
+
+.trs-split-details-table .el-table__body .cell {
+  text-align: right;
 }
 
 .trs-split-order-status {
@@ -2026,16 +2023,40 @@
 
 /* Status filtering keeps multi-selection visible without tag clutter. */
 .trs-status-filter-popper .el-select-dropdown__header {
-  padding: 6px 10px 6px 18px;
+  padding: 6px 10px;
   border-bottom: 1px solid #343941;
+}
+
+.trs-status-filter-popper .el-select-dropdown__item {
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .trs-status-filter-popper .el-checkbox {
   display: flex;
   align-items: center;
+  min-height: 16px;
   width: 100%;
   color: #cbd2dc;
   font-size: 12px;
+  line-height: 16px;
+}
+
+.trs-status-filter-popper .el-checkbox__input {
+  display: inline-flex;
+  flex: 0 0 14px;
+  align-items: center;
+  height: 14px;
+}
+
+.trs-status-filter-popper .el-checkbox__label {
+  display: flex;
+  align-items: center;
+  min-height: 16px;
+  padding-left: 8px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .trs-status-filter-popper .el-select-dropdown__item .el-checkbox {
@@ -2053,7 +2074,7 @@
 .trs-order-keyword .trs-order-search-action:hover, .trs-order-keyword .trs-order-search-action:focus-visible { background: #30343a; color: #dfc890; outline: 0; }
 .trs-order-keyword .trs-order-search-action .el-icon { font-size: 14px; }
 
-/* The order-list search and status selector share one fixed control height. */
+/* The order-list filters share one fixed control height. */
 .trs-order-index-filters .el-input,
 .trs-order-index-filters .el-select {
   --el-component-size: 28px;
@@ -2081,28 +2102,195 @@
   line-height: 26px;
 }
 
-/* Prioritize order lookup while keeping the status filter immediately available. */
+/* Search occupies the full filter row; the status control sits in the title bar. */
 .trs-order-index-filters {
-  grid-template-columns: minmax(120px, 1fr) 72px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  row-gap: 0;
 }
 
-.trs-order-index-filters > .el-input,
-.trs-order-index-filters > .el-select {
+.trs-order-index-filters > .el-input {
   width: 100%;
   min-width: 0;
+}
+
+.trs-order-index > header > .el-select {
+  --el-component-size: 28px;
+  width: 72px;
+  min-width: 72px;
+}
+
+.trs-order-index > header > .el-select .el-select__wrapper {
+  min-height: 28px;
+  height: 28px;
+  gap: 0;
+  padding: 0 6px !important;
+  background: #191b1e;
+  box-shadow: 0 0 0 1px #363a40 inset;
+}
+
+.trs-order-index > header > .el-select .el-select__selection {
+  min-width: 0;
+  margin-left: 0 !important;
+  gap: 0;
+}
+
+.trs-status-filter-summary {
+  display: block;
+  overflow: hidden;
+  color: #cbd2dc;
+  font-size: 11px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .trs-order-keyword .el-input__inner {
   width: 120px !important;
 }
 
-/* Make the standard-order identifier distinct from the non-standard teal tag. */
+/* Type identifiers use distinct solid fills without competing with order-status tags. */
+.trs-my-orders .trs-type-tag {
+  border: 0;
+  box-shadow: none;
+  font-weight: 500;
+}
+
 .trs-my-orders .trs-type-tag:not(.is-nonstandard) {
-  background: #263b50;
-  color: #96c9eb;
-  box-shadow: inset 0 0 0 1px #3a6280;
+  background: #2f5f94;
+  color: #e1efff;
+}
+
+.trs-my-orders .trs-type-tag.is-nonstandard {
+  background: #18746d;
+  color: #d6f7ef;
+}
+
+/* The count is part of the selected tab's active state, not a secondary label. */
+.trs-my-orders-tabbar nav button.active span {
+  color: #d5bc85;
+}
+
+/* Keep the quick-order account chooser anchored to its field; the search header needs no divider. */
+.trs-order-account-popper .el-select-dropdown__header,
+.trs-order-account-popper .account-dropdown-search {
+  border-bottom: 0;
+}
+
+/* Account, framework and counterparty controls share one row height in the quick-order drawer. */
+.trs-quick-order-workspace .order-context-block .order-account-block {
+  box-sizing: border-box;
+  min-height: 32px;
+  height: 32px;
+}
+
+.trs-quick-order-workspace .order-counterparty-block {
+  margin-top: 0;
+}
+
+.trs-quick-order-workspace .order-account-block.is-account-menu-open {
+  position: relative;
+  z-index: 10;
+}
+
+/* The selected value is read-only; the popover contains the searchable account/framework cascade. */
+.trs-quick-order-workspace .order-account-framework-trigger {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #e8eaed;
+  cursor: pointer;
+}
+
+.trs-quick-order-workspace .order-account-framework-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.trs-account-framework-popper {
+  padding: 0 !important;
+}
+
+.trs-account-framework-popper .account-dropdown-search {
+  padding: 8px;
+}
+
+.account-framework-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 148px;
+  border-top: 1px solid #363a40;
+}
+
+.account-framework-column {
+  min-width: 0;
+  padding: 4px 0;
+  border-right: 1px solid #363a40;
+}
+
+.account-framework-column:last-child {
+  border-right: 0;
+}
+
+.account-framework-column-title {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  color: #89929e;
+  font-size: 11px;
+  border-bottom: 1px solid #363a40;
+}
+
+.account-framework-column button {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
+  color: #c9ced6;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-framework-column button:hover,
+.account-framework-column button.active {
+  background: #302c24;
+  color: #dfc890;
+}
+
+.account-framework-column button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-framework-column button b {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.account-framework-column p {
+  margin: 9px;
+  color: #7f8793;
+  font-size: 11px;
+  text-align: center;
 }
 
 /* Code, customer and order-number copy shares the customer-card field tone. */
