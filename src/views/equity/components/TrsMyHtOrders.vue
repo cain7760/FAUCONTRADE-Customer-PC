@@ -259,8 +259,8 @@ const orders = ref([
   }
 }))
 
-const statusLabel = { orderPending: '下单待处理', amendPending: '改单待反馈', cancelPending: '撤单待反馈', cancelAllocationPending: '撤单待分配', dealAllocationPending: '成交待分配', exceptionPending: '异常待处理' }
-const doneStatusLabel = { approvalPending: '审批中', orderProcessed: '上手方待反馈', amendCompleted: '改单通过', amendFailed: '改单拒绝', feedbackCompleted: '已成交', exceptionClosed: '异常已办', cancelled: '已撤单', rejected: '已拒绝', partialCancelled: '部成撤单' }
+const statusLabel = { orderPending: '下单待处理', orderProcessed: '上手方待反馈', amendPending: '改单待反馈', cancelPending: '撤单待反馈', cancelAllocationPending: '撤单待分配', dealAllocationPending: '成交待分配', exceptionPending: '异常待处理' }
+const doneStatusLabel = { approvalPending: '审批中', amendCompleted: '改单通过', amendFailed: '改单拒绝', feedbackCompleted: '已成交', exceptionClosed: '异常已办', cancelled: '已撤单', rejected: '已拒绝', partialCancelled: '部成撤单' }
 const todoStatusValues = Object.keys(statusLabel)
 const doneStatusValues = Object.keys(doneStatusLabel)
 const isDoneAlternative = computed(() => activeView.value === 'doneAlternative')
@@ -323,7 +323,6 @@ function appendPlacedSystemOrder(payload) {
   if (!payload?.sourceOrderId || !payload.order) return
   const order = allOrders.value.find(item => item.id === payload.sourceOrderId)
   if (!order || !todoStatusValues.includes(order.status) || order.systemOrders?.some(item => item.id === payload.order.id)) return
-  const shouldRevealDoneOrder = activeView.value === 'todo' && selectedOrderId.value === order.id
   const placedOrder = payload.order
   order.systemOrders = [...(order.systemOrders || []), {
     id: placedOrder.id,
@@ -343,11 +342,7 @@ function appendPlacedSystemOrder(payload) {
   order.status = 'orderProcessed'
   order.deal = createDealInfo(order)
   order.remark = `${order.remark} 已新增 1 笔上手方订单。`
-  appendHistory(order, '交易员下单', '已通过快速下单新增上手方订单，订单已转入已办并等待上手方反馈。')
-  if (shouldRevealDoneOrder) {
-    activeView.value = 'doneAlternative'
-    selectedOrderId.value = order.id
-  }
+  appendHistory(order, '交易员下单', '已通过快速下单新增上手方订单，等待上手方反馈。')
 }
 watch(placedTrsOrders, orders => orders.forEach(appendPlacedSystemOrder), { deep: true, immediate: true, flush: 'sync' })
 const isApprovalPending = computed(() => activeOrder.value?.status === 'approvalPending')
@@ -620,7 +615,6 @@ function placeEquityOrder() {
       executionType: 'highTouch',
       sourceOrderSide: order.direction === '卖出' ? 'sell' : 'buy',
       symbolCode: order.code,
-      algorithm: 'POV',
       type: 'limit',
       price: Number(order.price.replace(/,/g, '')),
       quantity: amountMode ? undefined : Number(order.quantity.replace(/[^\d.]/g, '')),

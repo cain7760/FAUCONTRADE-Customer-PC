@@ -22,6 +22,7 @@ import TradingTable from './components/TradingTable.vue'
 import TrsMyHtOrders from './components/TrsMyHtOrders.vue'
 import TrsOrderPool from './components/TrsOrderPool.vue'
 import TrsQuickOrderWorkspace from './components/TrsQuickOrderWorkspace.vue'
+import ExportDataPopover from './components/ExportDataPopover.vue'
 import { addManualEquityOrderToPool, recordPlacedTrsOrder } from './trsOrderStore'
 
 const initialVariant = new URLSearchParams(location.search).get('layout')
@@ -127,9 +128,6 @@ const cancelOrderVisible = ref(false), cancelingOrder = ref(null)
 const convertManualVisible = ref(false), convertingManualOrder = ref(null)
 const conversionRemark = ref('')
 const historyVisible = ref(false), historyRecord = ref(null)
-const exportDialogVisible = ref(false)
-const exportTarget = ref('positions')
-const exportDateRange = ref([])
 const tableRefreshKey = ref(0)
 const trsPoolExportRows = ref([])
 const trsOrderTicketVisible = ref(false)
@@ -203,7 +201,7 @@ const tradeFilters = ref({ symbol: '', side: 'ALL', openClose: 'ALL', orderType:
 const appliedTradeFilters = ref({ symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL' })
 const sortState = ref({ prop: null, direction: null })
 const orderSortState = ref({ prop: null, direction: null })
-const positionColumnDefaults = columnOptionsFor('positions').map(([id]) => id)
+const positionColumnDefaults = columnOptionsFor('positions').map(([id]) => id).filter(id => !['orderRemark', 'traderRemark'].includes(id))
 const visibleColumnKeys = ref([...positionColumnDefaults])
 const columnOptions = columnOptionsFor('positions')
 const orderColumnDefaults = columnOptionsFor('orders').map(([id]) => id)
@@ -283,7 +281,6 @@ const trades = computed(() => demoOrders.value
     && (appliedTradeFilters.value.openClose === 'ALL' || trade.openClose === appliedTradeFilters.value.openClose)
     && (appliedTradeFilters.value.orderType === 'ALL' || trade.orderType === appliedTradeFilters.value.orderType)))
 const floatStyle = computed(() => dock.value === 'floating' ? { left: `${floating.value.x}px`, top: `${floating.value.y}px`, width:`${floating.value.width}px`, height:`${floating.value.height}px` } : {})
-const exportTargetLabel = computed(() => ({ positions: '持仓', orders: '订单', trades: '成交', trsPool: 'HT请求订单' }[exportTarget.value] || '数据'))
 function resetTicketLayout() {
   dock.value = defaultTicketDock.value
   collapsed.value = false
@@ -444,6 +441,8 @@ function fillProgressValue(row) {
 }
 function orderSortValue(row, prop) {
   if (prop === 'fillProgress') return fillProgressValue(row) ?? -1
+  if (prop === 'filledAmount') return Number(row.filledQuantity || 0) * Number(row.filledPrice || 0)
+  if (prop === 'canceledValue') return Number(row.canceledAmount || row.canceledQuantity) || 0
   return Number(row[prop]) || 0
 }
 function canceledOrderValue(row) { return row.canceledAmount ? `${money(row.canceledAmount)} CNY` : row.canceledQuantity ? `${number(row.canceledQuantity)} 股` : '--' }
@@ -535,14 +534,9 @@ function exportTrsPoolOrders(rows = trsPoolExportRows.value) {
   ])
   downloadCsv('HT请求订单.csv', header, records)
 }
-function openExport(target) {
-  exportTarget.value = target
-  exportDateRange.value = []
-  exportDialogVisible.value = true
-}
-function openTrsPoolExport(rows) {
+function openTrsPoolExport({ rows, dateRange }) {
   trsPoolExportRows.value = rows
-  openExport('trsPool')
+  confirmExport('trsPool', dateRange)
 }
 function exportRowDate(target, row) {
   if (target === 'positions') return row.positionDate
@@ -550,22 +544,21 @@ function exportRowDate(target, row) {
   if (target === 'trades') return row.filledTime
   return row.submittedAt
 }
-function exportRowsFor(target) {
+function exportRowsFor(target, dateRange = []) {
   const rows = target === 'positions' ? sortedRows.value : target === 'orders' ? orders.value : target === 'trades' ? trades.value : trsPoolExportRows.value
-  const [startDate, endDate] = exportDateRange.value || []
+  const [startDate, endDate] = dateRange
   if (!startDate || !endDate) return rows
   return rows.filter(row => {
     const date = String(exportRowDate(target, row) || '').slice(0, 10)
     return date >= startDate && date <= endDate
   })
 }
-function confirmExport() {
-  const rows = exportRowsFor(exportTarget.value)
-  if (exportTarget.value === 'positions') exportPositions(rows)
-  if (exportTarget.value === 'orders') exportOrders(rows)
-  if (exportTarget.value === 'trades') exportTrades(rows)
-  if (exportTarget.value === 'trsPool') exportTrsPoolOrders(rows)
-  exportDialogVisible.value = false
+function confirmExport(target, dateRange = []) {
+  const rows = exportRowsFor(target, dateRange)
+  if (target === 'positions') exportPositions(rows)
+  if (target === 'orders') exportOrders(rows)
+  if (target === 'trades') exportTrades(rows)
+  if (target === 'trsPool') exportTrsPoolOrders(rows)
 }
 function refreshTable() { tableRefreshKey.value += 1 }
 function chooseDock(value) { dock.value = value; if(value === 'floating' && workspace.value) floating.value = {x:Math.max(0, workspace.value.clientWidth-350),y:12,width:340,height:Math.min(650,workspace.value.clientHeight-12)} }
@@ -671,7 +664,6 @@ function loadPositionIntoTicket(row) {
   selectedCode.value = row.code
   ticketContext.value = {
     executionType: row.executionType === 'highTouch' ? 'highTouch' : 'lowTouch',
-    algorithm: ['POV', 'DMA'].includes(row.algorithm) ? row.algorithm : 'DMA',
   }
   quote.value = null
   collapsed.value = false
@@ -822,7 +814,6 @@ function confirmCancelOrder() {
 }
 useDialogShortcuts(cancelOrderVisible, { confirm: confirmCancelOrder, cancel: () => { cancelOrderVisible.value = false } })
 useDialogShortcuts(convertManualVisible, { confirm: confirmConvertToManual, cancel: () => { convertManualVisible.value = false; conversionRemark.value = '' } })
-useDialogShortcuts(exportDialogVisible, { confirm: confirmExport, cancel: () => { exportDialogVisible.value = false } })
 useDialogShortcuts(settingsVisible, { confirm: () => settingsDetail.value === 'password' ? confirmPasswordChange() : saveSettings(), cancel: () => settingsDetail.value === 'password' ? closePasswordDialog() : closeSettings() })
 function updateViewportWidth() { viewportWidth.value = window.innerWidth }
 onMounted(() => {
@@ -867,7 +858,7 @@ onBeforeUnmount(() => {
       <TrsMyHtOrders v-else-if="activeTraderPrimary === 'swap' && activeTraderSecondary === '我的HT订单'" @back-to-pool="activeTraderSecondary = '订单管理'" @place-order="openTrsOrderTicket" @deal-recorded="recordHtDealInEquity" />
       <section v-else class="trader-center-canvas" :aria-label="activeTraderSecondary"></section>
       <el-drawer v-model="trsOrderTicketVisible" title="快速下单" direction="rtl" size="599px" :close-on-click-modal="false" :close-on-press-escape="false" class="trs-quick-order-drawer">
-        <TrsQuickOrderWorkspace :instruments="trsTicketInstruments" :accounts="accounts" :symbol="trsTicketSymbol" :account="account" :paused="!systemRunning" :ticket-context="{ executionType: 'highTouch', algorithm: 'POV' }" :initial-order="trsOrderRequest?.initialOrder" @account-select="selectTicketAccount" @select="code => { selectedCode = code }" @order="acceptTrsOrder" />
+        <TrsQuickOrderWorkspace :instruments="trsTicketInstruments" :accounts="accounts" :symbol="trsTicketSymbol" :account="account" :paused="!systemRunning" :ticket-context="{ executionType: 'highTouch' }" :initial-order="trsOrderRequest?.initialOrder" @account-select="selectTicketAccount" @select="code => { selectedCode = code }" @order="acceptTrsOrder" />
       </el-drawer>
     </section>
     <section v-else-if="isUnderDevelopment" class="development-placeholder" aria-label="功能开发中"><p>当前功能正在开发中</p></section>
@@ -885,7 +876,7 @@ onBeforeUnmount(() => {
       <section class="positions-pane workspace-panel">
         <header class="positions-tabs"><button :class="{active:tab==='positions'}" @click="tab='positions'">所有持仓<span>({{ allRows.length }})</span></button><button :class="{active:tab==='orders'}" @click="tab='orders'">所有订单<span>({{ orders.length }})</span></button><button :class="{active:tab==='trades'}" @click="tab='trades'">所有成交<span>({{ trades.length }})</span></button><el-select v-model="selectedAccountIds" class="global-account-filter" multiple collapse-tags :max-collapse-tags="1" placeholder="下单账户" aria-label="全局下单账户筛选" popper-class="variant-popper global-account-popper" :offset="2" @visible-change="handleGlobalAccountVisible" @change="updateGlobalAccountSelection"><template #header><div class="account-dropdown-search" @click.stop><el-input v-model="globalAccountSearch" :prefix-icon="Search" placeholder="搜索下单账户" clearable /></div></template><el-option label="全部账户" :value="allAccountsValue" /><el-option v-for="option in filteredGlobalAccounts" :key="option.id" :label="accountLabel(option.id)" :value="option.id" /></el-select><button v-if="collapsed" class="workspace-restore-ticket" @click="collapsed=false"><img class="restore-panel-icon" :src="assetUrl('panel-expand.svg')" alt=""><span class="restore-panel-label">展开下单面板</span></button></header>
         <template v-if="tab==='positions'">
-          <div class="position-filters"><el-input v-model="query" :prefix-icon="Search" placeholder="代码 / 名称" aria-label="搜索持仓" clearable /><el-select v-model="market" aria-label="持仓市场" popper-class="variant-popper" :offset="2"><el-option label="全部市场" value="ALL"/><el-option label="深市" value="SZ"/><el-option label="沪市" value="SH"/></el-select><el-select v-model="positionType" placeholder="多空方向" aria-label="多空方向筛选" popper-class="variant-popper" :offset="2"><el-option label="全部" value="ALL"/><el-option label="多头" value="多"/><el-option label="空头" value="空"/></el-select><el-button class="filter-query" @click="applyFilters">查询</el-button><el-button link @click="clearFilters">重置</el-button><div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新持仓" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><el-tooltip content="选择时间范围后导出当前持仓" placement="top"><button class="export-positions" aria-label="导出持仓" @click="openExport('positions')"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></el-tooltip></div></div>
+          <div class="position-filters"><el-input v-model="query" :prefix-icon="Search" placeholder="代码 / 名称" aria-label="搜索持仓" clearable /><el-select v-model="market" aria-label="持仓市场" popper-class="variant-popper" :offset="2"><el-option label="全部市场" value="ALL"/><el-option label="深市" value="SZ"/><el-option label="沪市" value="SH"/></el-select><el-select v-model="positionType" placeholder="多空方向" aria-label="多空方向筛选" popper-class="variant-popper" :offset="2"><el-option label="全部" value="ALL"/><el-option label="多头" value="多"/><el-option label="空头" value="空"/></el-select><el-button class="filter-query" @click="applyFilters">查询</el-button><el-button link @click="clearFilters">重置</el-button><div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新持仓" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="持仓" @export="dateRange => confirmExport('positions', dateRange)"><button class="export-positions" aria-label="导出持仓" title="选择时间范围后导出当前持仓"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div></div>
           <TradingTable :key="`positions-${tableRefreshKey}`" ref="table" class="original-fields" :data="sortedRows" height="100%" :fit="false" row-key="id" empty-text="无匹配持仓，请调整或重置筛选" @row-dblclick="loadPositionIntoTicket">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
             <template v-for="columnKey in visibleColumnKeys" :key="columnKey">
@@ -903,7 +894,7 @@ onBeforeUnmount(() => {
               <el-table-column v-else-if="columnKey === 'dailyRealizedProfit'" prop="dailyRealizedProfit" width="96" align="right" header-align="right"><template #header><SortHeader label="实现盈亏" numeric :direction="sortState.prop === 'dailyRealizedProfit' ? sortState.direction : null" @sort="toggleSort('dailyRealizedProfit')" /></template><template #default="{row}"><span :class="row.dailyRealizedProfit >= 0 ? 'up' : 'down'">{{ money(row.dailyRealizedProfit) }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'floatingProfit'" prop="floatingProfit" width="88" align="right" header-align="right"><template #header><SortHeader label="浮动盈亏" numeric :direction="sortState.prop === 'floatingProfit' ? sortState.direction : null" @sort="toggleSort('floatingProfit')" /></template><template #default="{row}"><span :class="row.floatingProfit >= 0 ? 'up' : 'down'">{{ money(row.floatingProfit) }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'currency'" prop="currency" label="币种" width="56" />
-              <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="92" />
+              <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="132"><template #default="{row}">{{ accountLabel(row.account) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'market'" prop="market" label="市场" width="48"><template #default="{row}">{{ row.market === 'SZ' ? '深市' : '沪市' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderRemark'" prop="orderRemark" label="下单备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.orderRemark || '--' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'traderRemark'" prop="traderRemark" label="交易员备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.traderRemark || '--' }}</template></el-table-column>
@@ -919,10 +910,10 @@ onBeforeUnmount(() => {
             <el-select v-show="visibleOrderFilterCount > 1" v-model="orderFilters.side" class="order-filter-optional" aria-label="买卖方向筛选" popper-class="variant-popper" :offset="2"><el-option label="买卖方向" value="ALL"/><el-option label="买入" value="buy"/><el-option label="卖出" value="sell"/></el-select>
             <el-select v-show="visibleOrderFilterCount > 2" v-model="orderFilters.openClose" class="order-filter-optional" aria-label="开平类型筛选" popper-class="variant-popper" :offset="2"><el-option label="开平类型" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select>
             <el-select v-show="visibleOrderFilterCount > 3" v-model="orderFilters.orderType" class="order-filter-optional" aria-label="订单类型筛选" popper-class="variant-popper" :offset="2"><el-option label="订单类型" value="ALL"/><el-option label="系统单" value="系统单"/><el-option label="手工单" value="手工单"/></el-select>
-            <el-select v-show="visibleOrderFilterCount > 4" v-model="orderFilters.status" class="order-status-filter order-filter-optional" multiple collapse-tags :max-collapse-tags="1" placeholder="状态" aria-label="状态筛选" popper-class="variant-popper order-status-popper" :offset="2"><template #header><div class="order-status-filter-actions"><button type="button" @click.stop="selectAllOrderStatuses">全选</button><i></i><button type="button" @click.stop="invertOrderStatuses">反选</button></div></template><el-option v-for="option in orderStatusOptions" :key="option.value" :label="option.label" :value="option.value"><el-checkbox :model-value="orderFilters.status.includes(option.value)" @click.stop @change="toggleOrderStatus(option.value)">{{ option.label }}</el-checkbox></el-option></el-select>
-            <el-popover trigger="click" placement="bottom-start" :width="260" popper-class="variant-popper order-filter-more-popper"><template #reference><el-button v-show="visibleOrderFilterCount < 5" class="order-filter-more" aria-label="更多筛选条件">更多<el-icon><ArrowDownBold /></el-icon></el-button></template><div class="order-filter-more-panel"><label v-if="visibleOrderFilterCount <= 0">订单编号<el-input v-model="orderFilters.orderNo" placeholder="请输入订单编号" clearable /></label><label v-if="visibleOrderFilterCount <= 1">买卖方向<el-select v-model="orderFilters.side" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="买入" value="buy"/><el-option label="卖出" value="sell"/></el-select></label><label v-if="visibleOrderFilterCount <= 2">开平类型<el-select v-model="orderFilters.openClose" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select></label><label v-if="visibleOrderFilterCount <= 3">订单类型<el-select v-model="orderFilters.orderType" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="系统单" value="系统单"/><el-option label="手工单" value="手工单"/></el-select></label><label v-if="visibleOrderFilterCount <= 4">订单状态<el-select v-model="orderFilters.status" class="order-status-filter" multiple collapse-tags :max-collapse-tags="1" placeholder="全部" popper-class="variant-popper order-status-popper"><template #header><div class="order-status-filter-actions"><button type="button" @click.stop="selectAllOrderStatuses">全选</button><i></i><button type="button" @click.stop="invertOrderStatuses">反选</button></div></template><el-option v-for="option in orderStatusOptions" :key="option.value" :label="option.label" :value="option.value"><el-checkbox :model-value="orderFilters.status.includes(option.value)" @click.stop @change="toggleOrderStatus(option.value)">{{ option.label }}</el-checkbox></el-option></el-select></label></div></el-popover>
+            <el-select v-show="visibleOrderFilterCount > 4" v-model="orderFilters.status" class="order-status-filter order-filter-optional" multiple collapse-tags :max-collapse-tags="1" placeholder="状态" aria-label="状态筛选" popper-class="variant-popper order-status-popper" :offset="2"><template #header><div class="order-status-filter-actions" @mousedown.stop><button type="button" @click.stop="selectAllOrderStatuses">全选</button><i></i><button type="button" @click.stop="invertOrderStatuses">反选</button></div></template><el-option v-for="option in orderStatusOptions" :key="option.value" :label="option.label" :value="option.value"><el-checkbox :model-value="orderFilters.status.includes(option.value)" @click.stop @change="toggleOrderStatus(option.value)">{{ option.label }}</el-checkbox></el-option></el-select>
+            <el-popover trigger="click" placement="bottom-start" :width="260" popper-class="variant-popper order-filter-more-popper"><template #reference><el-button v-show="visibleOrderFilterCount < 5" class="order-filter-more" aria-label="更多筛选条件">更多<el-icon><ArrowDownBold /></el-icon></el-button></template><div class="order-filter-more-panel"><label v-if="visibleOrderFilterCount <= 0">订单编号<el-input v-model="orderFilters.orderNo" placeholder="请输入订单编号" clearable /></label><label v-if="visibleOrderFilterCount <= 1">买卖方向<el-select v-model="orderFilters.side" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="买入" value="buy"/><el-option label="卖出" value="sell"/></el-select></label><label v-if="visibleOrderFilterCount <= 2">开平类型<el-select v-model="orderFilters.openClose" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select></label><label v-if="visibleOrderFilterCount <= 3">订单类型<el-select v-model="orderFilters.orderType" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="系统单" value="系统单"/><el-option label="手工单" value="手工单"/></el-select></label><label v-if="visibleOrderFilterCount <= 4">订单状态<el-select v-model="orderFilters.status" class="order-status-filter" multiple collapse-tags :max-collapse-tags="1" placeholder="全部" popper-class="variant-popper order-status-popper" :teleported="false"><template #header><div class="order-status-filter-actions" @mousedown.stop><button type="button" @click.stop="selectAllOrderStatuses">全选</button><i></i><button type="button" @click.stop="invertOrderStatuses">反选</button></div></template><el-option v-for="option in orderStatusOptions" :key="option.value" :label="option.label" :value="option.value"><el-checkbox :model-value="orderFilters.status.includes(option.value)" @click.stop @change="toggleOrderStatus(option.value)">{{ option.label }}</el-checkbox></el-option></el-select></label></div></el-popover>
             <el-button class="filter-query" @click="applyOrderFilters">查询</el-button><el-button link @click="clearOrderFilters">重置</el-button>
-            <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新订单记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><el-tooltip content="选择时间范围后导出当前筛选结果" placement="top"><button class="export-orders" aria-label="导出订单记录" @click="openExport('orders')"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></el-tooltip></div>
+            <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新订单记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="订单" @export="dateRange => confirmExport('orders', dateRange)"><button class="export-orders" aria-label="导出订单记录" title="选择时间范围后导出当前筛选结果"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div>
           </div>
           <TradingTable :key="`orders-${tableRefreshKey}`" class="original-fields orders-table" :data="sortedOrders" :row-class-name="orderRowClassName" height="100%" :fit="false" empty-text="暂无订单记录">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
@@ -939,11 +930,11 @@ onBeforeUnmount(() => {
               <el-table-column v-else-if="columnKey === 'fillProgress'" label="成交进度" width="68" align="right" header-align="right"><template #header><SortHeader label="成交进度" numeric :direction="orderSortState.prop === 'fillProgress' ? orderSortState.direction : null" @sort="toggleOrderSort('fillProgress')" /></template><template #default="{row}">{{ fillProgress(row) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'filledQuantity'" prop="filledQuantity" width="76" align="right" header-align="right"><template #header><SortHeader label="已成数量" numeric :direction="orderSortState.prop === 'filledQuantity' ? orderSortState.direction : null" @sort="toggleOrderSort('filledQuantity')" /></template><template #default="{row}">{{ row.filledQuantity ? number(row.filledQuantity) : '--' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'filledPrice'" prop="filledPrice" width="76" align="right" header-align="right"><template #header><SortHeader label="成交均价" numeric :direction="orderSortState.prop === 'filledPrice' ? orderSortState.direction : null" @sort="toggleOrderSort('filledPrice')" /></template><template #default="{row}">{{ row.filledPrice === null ? '--' : formatPrice(row.filledPrice, row.market) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'filledAmount'" label="成交金额" width="72" align="right" header-align="right"><template #default="{row}">{{ filledAmount(row) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'canceledValue'" label="撤单数量/金额" width="96" align="right" header-align="right"><template #default="{row}">{{ canceledOrderValue(row) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledAmount'" label="成交金额" width="72" align="right" header-align="right"><template #header><SortHeader label="成交金额" numeric :direction="orderSortState.prop === 'filledAmount' ? orderSortState.direction : null" @sort="toggleOrderSort('filledAmount')" /></template><template #default="{row}">{{ filledAmount(row) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'canceledValue'" label="撤单数量/金额" width="96" align="right" header-align="right"><template #header><SortHeader label="撤单数量/金额" numeric :direction="orderSortState.prop === 'canceledValue' ? orderSortState.direction : null" @sort="toggleOrderSort('canceledValue')" /></template><template #default="{row}">{{ canceledOrderValue(row) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="132"><template #default="{row}">{{ accountLabel(row.account) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'frozenMargin'" prop="frozenMargin" label="冻结保证金" width="84" align="right" header-align="right"><template #default="{row}">{{ money(row.frozenMargin || 0) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'marginRate'" prop="marginRate" label="保证金率" width="64" align="right" header-align="right"><template #default="{row}">{{ row.marginRate || 0 }}%</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'frozenMargin'" prop="frozenMargin" label="冻结保证金" width="84" align="right" header-align="right"><template #header><SortHeader label="冻结保证金" numeric :direction="orderSortState.prop === 'frozenMargin' ? orderSortState.direction : null" @sort="toggleOrderSort('frozenMargin')" /></template><template #default="{row}">{{ money(row.frozenMargin || 0) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'marginRate'" prop="marginRate" label="保证金率" width="64" align="right" header-align="right"><template #header><SortHeader label="保证金率" numeric :direction="orderSortState.prop === 'marginRate' ? orderSortState.direction : null" @sort="toggleOrderSort('marginRate')" /></template><template #default="{row}">{{ row.marginRate || 0 }}%</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'feedback'" prop="feedback" label="备注" width="104" show-overflow-tooltip><template #default="{row}">{{ row.feedback || '--' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderNo'" prop="orderNo" label="订单编号" width="112"/>
               <el-table-column v-else-if="columnKey === 'orderTime'" prop="orderTime" label="订单时间" width="80"><template #default="{row}">{{ timeLabel(row.orderTime) }}</template></el-table-column>
@@ -964,7 +955,7 @@ onBeforeUnmount(() => {
             <el-select v-model="tradeFilters.openClose" aria-label="开平类型筛选" popper-class="variant-popper" :offset="2"><el-option label="开平类型" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select>
             <el-select v-model="tradeFilters.orderType" aria-label="订单类型筛选" popper-class="variant-popper" :offset="2"><el-option label="订单类型" value="ALL"/><el-option label="系统单" value="系统单"/><el-option label="手工单" value="手工单"/></el-select>
             <el-button class="filter-query" @click="applyTradeFilters">查询</el-button><el-button link @click="clearTradeFilters">重置</el-button>
-            <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新成交记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><el-tooltip content="选择时间范围后导出当前筛选结果" placement="top"><button class="export-orders" aria-label="导出成交记录" @click="openExport('trades')"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></el-tooltip></div>
+            <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新成交记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="成交" @export="dateRange => confirmExport('trades', dateRange)"><button class="export-orders" aria-label="导出成交记录" title="选择时间范围后导出当前筛选结果"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div>
           </div>
           <TradingTable :key="`trades-${tableRefreshKey}`" class="original-fields orders-table trades-table" :data="trades" height="100%" :fit="false" empty-text="暂无成交记录">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
@@ -1010,15 +1001,6 @@ onBeforeUnmount(() => {
     <ChaseOrderDialog :paused="!systemRunning" v-model="chaseOrderVisible" :position="chasingPosition" :order="chasingOrder" :account="chasingAccount" @submit="acceptChaseOrder" />
     <AmendOrderDialog v-model="amendOrderVisible" :order="amendingOrder" :symbol="amendingSymbol" :account="amendingAccount" @submit="acceptAmendOrder" />
     <OrderHistoryDialog v-model="historyVisible" :record="historyRecord" />
-    <BaseDialog v-model="exportDialogVisible" width="400px" class="variant-confirm export-time-dialog" title="导出数据" :close-on-press-escape="false">
-      <section class="export-time-form">
-        <p>导出{{ exportTargetLabel }}数据，可选择时间范围。</p>
-        <label for="export-date-range">时间范围</label>
-        <el-date-picker id="export-date-range" v-model="exportDateRange" type="daterange" value-format="YYYY-MM-DD" format="YYYY-MM-DD" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" clearable />
-        <small>不选择则导出全部时间。</small>
-      </section>
-      <template #footer><el-button @click="exportDialogVisible=false">取消[Esc]</el-button><el-button type="primary" @click="confirmExport">导出[Enter]</el-button></template>
-    </BaseDialog>
     <BaseDialog v-model="convertManualVisible" width="680px" align-center append-to-body class="variant-confirm convert-manual-dialog" title="转为手工单" :close-on-press-escape="false">
       <template v-if="convertingManualOrder">
         <p class="convert-manual-intro">转为手工单后，将由交易员直接接入审核；订单编号、价格、数量及异常状态保持不变。</p>

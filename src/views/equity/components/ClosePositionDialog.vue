@@ -13,7 +13,6 @@ watch(() => props.modelValue, visible => {
   quote.value = null
   initialOrder.value = {
     executionType: props.position?.orderType === '手工单' ? 'highTouch' : 'lowTouch',
-    algorithm: props.position?.algorithm || 'POV',
     type: 'limit',
     price: props.position?.price,
     quantity: Math.max(0, Number(props.position?.available) || 0),

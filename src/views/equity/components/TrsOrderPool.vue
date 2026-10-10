@@ -6,6 +6,7 @@ import BaseDialog from '../../../components/BaseDialog.vue'
 import TrsApprovalDialog from './TrsApprovalDialog.vue'
 import TradingFilterField from './TradingFilterField.vue'
 import TradingTable from './TradingTable.vue'
+import ExportDataPopover from './ExportDataPopover.vue'
 import { positions } from '../fixtures'
 import { claimPoolOrders, movePoolOrdersToTrader, poolOrders, traderHtOrders } from '../trsOrderStore'
 
@@ -114,7 +115,7 @@ function refreshTable() { tableRefreshKey.value += 1 }
     <div class="trs-pool-toolbar">
       <div v-if="poolStatus === 'pending'" class="trs-pool-actions"><el-button type="primary" :disabled="!selectedIds.length" @click="claim()">批量认领</el-button><button type="button" :disabled="!canBatchReject" class="is-danger" @click="openReject()">批量拒单</button></div>
       <p v-else>{{ poolStatus === 'processing' ? '处理中订单已由交易员认领。' : '已处理订单仅供查询。' }}</p>
-      <div class="trs-pool-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button type="button" class="trs-pool-refresh" aria-label="刷新订单池" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><el-tooltip content="导出当前筛选结果" placement="top"><button type="button" class="trs-pool-export" aria-label="导出订单池" @click="emit('export', visibleOrders)"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></el-tooltip></div>
+      <div class="trs-pool-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button type="button" class="trs-pool-refresh" aria-label="刷新订单池" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="HT请求订单" @export="dateRange => emit('export', { rows: visibleOrders, dateRange })"><button type="button" class="trs-pool-export" aria-label="导出订单池" title="导出当前筛选结果"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div>
     </div>
 
     <div class="trs-pool-table-wrap">
@@ -137,7 +138,7 @@ function refreshTable() { tableRefreshKey.value += 1 }
         <el-table-column prop="orderNo" label="订单编号" width="128" />
         <el-table-column v-if="poolStatus !== 'pending'" prop="handler" label="处理人" width="72" />
         <el-table-column v-if="poolStatus !== 'pending'" prop="processedAt" label="处理时间" width="126" />
-        <el-table-column label="操作" width="122" fixed="right" align="center" class-name="trs-pool-operation-column" label-class-name="trs-pool-operation-column"><template #default="{ row }"><div v-if="poolStatus === 'pending'" class="trs-pool-row-actions"><el-button link type="primary" @click="claim([row.id])">处理</el-button><el-button link type="danger" @click="openReject([row.id])">拒单</el-button></div><el-button v-else link class="trs-pool-view" @click="openDetail(row)">查看</el-button></template></el-table-column>
+        <el-table-column label="操作" width="154" fixed="right" align="center" class-name="trs-pool-operation-column" label-class-name="trs-pool-operation-column"><template #default="{ row }"><div v-if="poolStatus === 'pending'" class="trs-pool-row-actions"><el-button link type="primary" @click="claim([row.id])">认领</el-button><el-button link type="primary" @click="claim([row.id])">处理</el-button><el-button link type="danger" @click="openReject([row.id])">拒单</el-button></div><el-button v-else link class="trs-pool-view" @click="openDetail(row)">查看</el-button></template></el-table-column>
       </TradingTable>
     </div>
     <footer class="trs-pool-pagination"><span>共 {{ visibleOrders.length }} 条</span><el-pagination small background layout="prev, pager, next" :total="visibleOrders.length" :page-size="10" /></footer>
