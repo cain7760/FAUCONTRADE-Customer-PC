@@ -856,8 +856,20 @@
   background: #363a40;
 }
 
-.trs-quick-order-workspace .book-pane { grid-area: book; border-right: 0; border-radius: 4px 0 0 4px; }
-.trs-quick-order-workspace .ticket-pane { grid-area: ticket; border-left: 0; border-radius: 0 4px 0 0; }
+.trs-quick-order-workspace .book-pane {
+  grid-area: book;
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0 0 0 4px;
+}
+
+.trs-quick-order-workspace .ticket-pane {
+  grid-area: ticket;
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0;
+}
 .trs-quick-order-workspace .ticket-assets { grid-area: assets; border-left: 0 !important; border-radius: 0 0 4px 0 !important; }
 .trs-quick-order-workspace .book-scroll,
 .trs-quick-order-workspace .order-form { min-height: 0; overflow: auto; }
@@ -1389,18 +1401,6 @@
   color: #89bdd6;
 }
 
-.trs-order-index-list > button .trs-status-tag.is-amendPending {
-  border-color: #594773;
-  background: #3a304a;
-  color: #bca5e5;
-}
-
-.trs-order-index-list > button .trs-status-tag.is-cancelPending {
-  border-color: #70474d;
-  background: #4a3034;
-  color: #e5a4ad;
-}
-
 .trs-order-index-list > button .trs-status-tag.is-dealAllocationPending {
   border-color: #39677d;
   background: #263d4b;
@@ -1893,10 +1893,6 @@
   width: 100% !important;
 }
 
-.trs-split-details-table .el-table__body .cell {
-  text-align: right;
-}
-
 .trs-split-order-status {
   color: #dfc890;
   font-size: 12px;
@@ -2214,6 +2210,38 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+
+/* 交易员只选上手方；客户原始订单参数保持高对比的只读态。 */
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .order-account-framework-trigger:disabled,
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .algorithm-trigger:disabled {
+  color: #d7dce4;
+  cursor: default;
+  opacity: 1;
+}
+
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .el-radio-button.is-disabled .el-radio-button__inner {
+  cursor: default;
+  opacity: 1;
+}
+
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .el-input.is-disabled .el-input__wrapper,
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .el-select__wrapper.is-disabled {
+  background: #25282d;
+  box-shadow: 0 0 0 1px #353a42 inset;
+  cursor: default;
+  opacity: 1;
+}
+
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .el-input.is-disabled .el-input__inner,
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .el-select__wrapper.is-disabled .el-select__selected-item {
+  color: #c9cfd8;
+  -webkit-text-fill-color: #c9cfd8;
+}
+
+.trs-quick-order-workspace .order-form.is-customer-order-readonly .price-stepper button:disabled {
+  color: #69727f;
+  cursor: default;
 }
 
 .trs-account-framework-popper {

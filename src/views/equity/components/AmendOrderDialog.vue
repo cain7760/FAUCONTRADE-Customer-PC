@@ -16,6 +16,14 @@ const lotSize = computed(() => props.symbol?.lotSize || 100)
 const originalPrice = computed(() => props.order?.price ?? null)
 const originalQuantity = computed(() => Number(props.order?.quantity) || 0)
 const filledQuantity = computed(() => Number(props.order?.filledQuantity) || 0)
+const maximumQuantity = computed(() => {
+  if (props.order?.side === 'sell') return Math.max(0, Number(props.symbol?.available) || 0)
+  const effectivePrice = isMarket.value ? Number(props.symbol?.price) : Number(price.value)
+  const cash = Number(props.account?.cash) || 0
+  return effectivePrice > 0 ? Math.floor(cash / effectivePrice / lotSize.value) * lotSize.value : 0
+})
+const quantitySummaryLabel = computed(() => props.order?.side === 'sell' ? '卖出' : '买入')
+const capacityLabel = computed(() => props.order?.side === 'sell' ? '最大可卖' : '最大可买')
 const quantityDelta = computed(() => (Number(quantity.value) || 0) - originalQuantity.value)
 const priceChanged = computed(() => !isMarket.value && Number(price.value) !== Number(originalPrice.value))
 const operation = computed(() => quantityDelta.value > 0 ? '追单' : quantityDelta.value < 0 ? '部撤' : '改价')
@@ -77,18 +85,18 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
         <div><span>原订单编号</span><b :title="order.orderNo">{{ order.orderNo }}</b></div>
         <div><span>原委托价格</span><b>{{ originalPrice === null ? '市价' : formatPrice(originalPrice, order.market) }}</b></div>
         <div><span>原委托数量</span><b>{{ number(originalQuantity) }}</b></div>
-        <div><span>已成数量</span><b>{{ number(filledQuantity) }}</b></div>
+        <div><span>订单数量</span><b>{{ number(filledQuantity) }}</b></div>
       </div>
     </template>
     <template #order>
       <form class="order-form chase-order-form amend-order-form" @submit.prevent="submit">
-        <section class="order-type-row"><span class="amend-order-type">{{ isMarket ? '市价单' : '限价单' }}</span><span>{{ order.side === 'buy' ? '买入' : '卖出' }} · {{ order.openClose === '开' ? '开仓' : '平仓' }}</span></section>
+        <section class="order-type-row amend-order-context"><span class="amend-order-direction">{{ order.side === 'buy' ? '买入' : '卖出' }} · {{ order.openClose === '开' ? '开仓' : '平仓' }}</span></section>
         <section class="price-block">
-          <template v-if="!isMarket"><div class="field-caption"><label for="amend-price">修改后价格</label><span class="dim">原价 {{ formatPrice(originalPrice, order.market) }}</span></div><el-input-number id="amend-price" v-model="price" :step=".01" :precision="2" :controls="false" /></template>
-          <template v-else><div class="field-caption"><span>订单价格</span></div><div class="market-price-note"><b>市价单不支持改价</b></div></template>
+          <template v-if="!isMarket"><div class="field-caption"><label for="amend-price">订单价格</label><span class="amend-order-type">限价单</span></div><el-input-number id="amend-price" v-model="price" :step=".01" :precision="2" :controls="false" /></template>
+          <template v-else><div class="field-caption"><span>订单价格</span><span class="amend-order-type">市价单</span></div><div class="market-price-note"><b>市价单不支持改价</b></div></template>
         </section>
-        <section class="quantity-block"><div class="field-caption"><label for="amend-quantity">修改后数量</label><span class="dim">原数量 {{ number(originalQuantity) }} 股</span></div><div class="quantity-input-row"><el-input-number id="amend-quantity" v-model="quantity" :min="filledQuantity" :step="lotSize" :precision="0" :controls="false" /><span>股</span></div><p class="amend-order-hint" :class="{ 'is-error': formError }">{{ formError || operationHint }}</p></section>
-        <section class="submit-block"><div class="trade-buttons"><el-button native-type="submit" class="buy-action" :disabled="!canSubmit">确认改单</el-button></div><div class="amend-order-summary"><div><span>操作类型</span><b>{{ operation }}</b></div><div><span>修改后金额(CNY)</span><b>{{ quantity ? money((isMarket ? symbol.price : price || 0) * quantity) : '--' }}</b></div><div><span>可撤数量(股)</span><b>{{ number(Math.max(0, originalQuantity - filledQuantity)) }}</b></div></div></section>
+        <section class="quantity-block"><div class="field-caption"><label for="amend-quantity">订单数量</label></div><div class="quantity-input-row"><el-input-number id="amend-quantity" v-model="quantity" :min="filledQuantity" :step="lotSize" :precision="0" :controls="false" /><span>股</span></div><p class="amend-order-hint" :class="{ 'is-error': formError }">{{ formError || operationHint }}</p><div class="amend-order-capacity"><span>{{ capacityLabel }}</span><b>{{ number(maximumQuantity) }} 股</b></div></section>
+        <section class="submit-block"><div class="trade-buttons"><el-button native-type="submit" class="buy-action" :disabled="!canSubmit">确认改单</el-button></div><div class="amend-order-summary"><div><span>{{ quantitySummaryLabel }}</span><b>{{ quantity ? `${number(quantity)} 股` : '--' }}</b></div><div><span>预估金额(CNY)</span><b>{{ quantity ? money((isMarket ? symbol.price : price || 0) * quantity) : '--' }}</b></div></div></section>
       </form>
     </template>
   </PositionOrderDialog>

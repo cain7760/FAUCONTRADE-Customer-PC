@@ -99,14 +99,18 @@ export function claimPoolOrders(ids) {
 
   claimedHtOrders.value.push(...claimed.map((order, index) => {
     const holding = positions[(claimedHtOrders.value.length + index) % positions.length]
-    const reviewStatus = order.tradeType === '改单' ? 'amendPending' : order.tradeType === '撤单' ? 'cancelPending' : 'orderPending'
-    const reviewRequest = order.tradeType === '改单'
+    const automaticStatus = order.tradeType === '改单'
+      ? (order.riskTag === 'rejected' ? 'amendFailed' : 'amendCompleted')
+      : order.tradeType === '撤单' ? 'cancelled' : 'orderPending'
+    const automaticResult = order.tradeType === '改单'
       ? order.riskTag === 'rejected'
-        ? '风控校验未通过，客户申请改单，等待交易员审核。'
-        : '客户申请改单，等待交易员审核。'
+        ? '风控校验未通过，改单已自动失败并转入已办。'
+        : '系统已自动完成客户改单，并转入已办。'
       : order.tradeType === '撤单'
-        ? '客户申请撤单，等待交易员审核。'
+        ? '系统已自动完成客户撤单，并转入已办。'
         : undefined
+    const traderOrder = traderHtOrders.value.find(item => item.id === `trader-${order.id}`)
+    if (traderOrder && automaticResult) Object.assign(traderOrder, { status: automaticStatus, processedAt: '2026-09-22 10:08:20' })
     return {
       ...order,
       id: `claimed-${order.id}`,
@@ -115,10 +119,11 @@ export function claimPoolOrders(ids) {
       underlying: holding.name,
       code: `${holding.code}.${holding.market}`,
       price: holding.price.toFixed(2),
-      status: reviewStatus,
-      request: reviewRequest,
-      remark: reviewRequest || '已从订单池认领，等待交易员处理。',
-      history: [{ label: '订单认领', at: '2026-09-22 10:08:20', detail: '交易员已从订单池认领。' }],
+      status: automaticStatus,
+      request: automaticResult,
+      remark: automaticResult || '已从订单池认领，等待交易员处理。',
+      processedAt: automaticResult ? '2026-09-22 10:08:20' : undefined,
+      history: [{ label: automaticResult ? '系统自动处理' : '订单认领', at: '2026-09-22 10:08:20', detail: automaticResult || '交易员已从订单池认领。' }],
       assets: '128,560,000.00 CNY',
       available: '46,250,000.00 CNY',
     }

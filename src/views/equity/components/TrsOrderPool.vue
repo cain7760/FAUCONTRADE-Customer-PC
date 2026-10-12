@@ -55,7 +55,7 @@ function claim(ids = selectedIds.value) {
   if (!claimedCount) return
   claimPoolOrders(ids)
   selectedIds.value = []
-  ElMessage.success(`已成功认领${claimedCount}条订单，可在我的HT订单待办中进行处理`)
+  ElMessage.success(`已成功认领${claimedCount}条订单，可在我的HT订单中查看处理结果`)
 }
 function openApproval(ids = selectedIds.value) {
   if (!ids.length) return
