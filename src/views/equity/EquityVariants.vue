@@ -134,6 +134,7 @@ const trsOrderTicketVisible = ref(false)
 const trsOrderRequest = ref(null)
 const orderStatusMachine = ['已撤', '暂停', '完成', '部成', '已报', '待报', '改单中', '异常', '拒绝', '其他']
 const orderStatusOptions = orderStatusMachine.map(status => ({ label: status, value: status }))
+const copyableIdentifierFields = new Set(['code', 'orderNo', 'tradeNo', 'entrustNo'])
 const demoOrderStatuses = [...orderStatusMachine, '暂停', '已报', '待报', '完成', '异常', '其他']
 const demoOrders = ref(demoOrderStatuses.map((status, index) => {
   const instrument = variantRows[index % variantRows.length]
@@ -201,6 +202,7 @@ const tradeFilters = ref({ symbol: '', side: 'ALL', openClose: 'ALL', orderType:
 const appliedTradeFilters = ref({ symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL' })
 const sortState = ref({ prop: null, direction: null })
 const orderSortState = ref({ prop: null, direction: null })
+const tradeSortState = ref({ prop: null, direction: null })
 const positionColumnDefaults = columnOptionsFor('positions').map(([id]) => id).filter(id => !['orderRemark', 'traderRemark'].includes(id))
 const visibleColumnKeys = ref([...positionColumnDefaults])
 const columnOptions = columnOptionsFor('positions')
@@ -280,6 +282,12 @@ const trades = computed(() => demoOrders.value
     && (appliedTradeFilters.value.side === 'ALL' || trade.side === appliedTradeFilters.value.side)
     && (appliedTradeFilters.value.openClose === 'ALL' || trade.openClose === appliedTradeFilters.value.openClose)
     && (appliedTradeFilters.value.orderType === 'ALL' || trade.orderType === appliedTradeFilters.value.orderType)))
+const sortedTrades = computed(() => {
+  const { prop, direction } = tradeSortState.value
+  if (!prop || !direction) return trades.value
+  const multiplier = direction === 'ascending' ? 1 : -1
+  return [...trades.value].sort((left, right) => ((Number(left[prop]) || 0) - (Number(right[prop]) || 0)) * multiplier)
+})
 const floatStyle = computed(() => dock.value === 'floating' ? { left: `${floating.value.x}px`, top: `${floating.value.y}px`, width:`${floating.value.width}px`, height:`${floating.value.height}px` } : {})
 function resetTicketLayout() {
   dock.value = defaultTicketDock.value
@@ -424,10 +432,40 @@ function enrichOrder(order) {
 function accountLabel(id) { const item = accounts.find(value => value.id === id); return item ? `${item.id} - ${item.name}` : id || '--' }
 function marketLabel(marketValue) { return marketValue === 'HK' ? '港股' : 'A股' }
 function timeLabel(value) { return value ? String(value).slice(-8) : '--' }
+function orderActivity(row) {
+  const entries = [
+    row?.feedback?.trim() && `系统：${row.feedback.trim()}`,
+    row?.traderRemark?.trim() && `交易员：${row.traderRemark.trim()}`,
+  ].filter(Boolean)
+  return entries.length ? entries.join('；') : '--'
+}
+function publishOrderActivityMessage(row, unread = true) {
+  const activity = orderActivity(row)
+  if (activity === '--') return
+  messages.value.unshift({
+    id: `order-activity-${row.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    category: '消息', title: '订单动态', content: `${row.name}（${row.code}）：${activity}`,
+    time: row.orderTime ? timeLabel(row.orderTime) : '刚刚', unread,
+  })
+}
+function seedOrderActivityMessages() {
+  demoOrders.value.filter(row => orderActivity(row) !== '--').reverse().forEach(row => publishOrderActivityMessage(row, false))
+}
 function filledAmount(row) {
   const quantity = Number(row.filledQuantity)
   const price = Number(row.filledPrice)
   return Number.isFinite(quantity) && quantity > 0 && Number.isFinite(price) && price > 0 ? money(quantity * price) : '--'
+}
+function sharesWithUnit(value) { return `${number(value)} 股` }
+function moneyWithUnit(value) { return `${money(value)} CNY` }
+function orderValueWithUnit(row) {
+  return row.inputAmount !== null && row.inputAmount !== undefined
+    ? moneyWithUnit(row.orderValueNumber ?? row.inputAmount)
+    : sharesWithUnit(row.quantity)
+}
+function filledAmountWithUnit(row) {
+  const value = filledAmount(row)
+  return value === '--' ? value : `${value} CNY`
 }
 function fillProgress(row) {
   const progress = fillProgressValue(row)
@@ -493,7 +531,7 @@ function toggleAssetsVisible() { assetsVisible.value = !assetsVisible.value; if 
 function applyFilters() { appliedPositionFilters.value = { query: query.value, market: market.value, positionType: positionType.value }; table.value?.setScrollTop?.(0) }
 function applyOrderFilters() { appliedOrderFilters.value = { ...orderFilters.value, status: [...orderFilters.value.status] }; orderSortState.value = { prop: null, direction: null } }
 function clearOrderFilters() { orderFilters.value = { orderNo: '', symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL', status: [] }; applyOrderFilters() }
-function applyTradeFilters() { appliedTradeFilters.value = { ...tradeFilters.value } }
+function applyTradeFilters() { appliedTradeFilters.value = { ...tradeFilters.value }; tradeSortState.value = { prop: null, direction: null } }
 function clearTradeFilters() { tradeFilters.value = { symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL' }; applyTradeFilters() }
 function clearFilters() { query.value = ''; market.value = 'ALL'; positionType.value = 'ALL'; sortState.value = { prop: null, direction: null }; table.value?.clearFilter(); applyFilters() }
 function downloadCsv(filename, header, records) {
@@ -510,19 +548,19 @@ function exportPositions(rows = sortedRows.value) {
   downloadCsv('持仓列表.csv', header, records)
 }
 function exportOrders(rows = orders.value) {
-  const header = ['证券代码', '证券名称', '订单状态', '方向', '订单属性', '订单价格', '订单数量', '订单金额', '挂单数量', '已成数量', '成交均价', '成交金额', '撤单数量', '撤单金额', '冻结保证金', '保证金率', '备注', '订单编号', '订单时间', '下单账户', '市场', '开平方向', '订单类型', '执行算法', '下单备注', '交易员备注']
+  const header = ['证券代码', '证券名称', '订单状态', '方向', '订单属性', '订单价格', '订单数量', '订单金额', '挂单数量', '已成数量', '成交均价', '成交金额', '撤单数量', '撤单金额', '冻结保证金', '保证金率', '订单动态', '订单编号', '订单时间', '下单账户', '市场', '开平方向', '订单类型', '执行算法', '下单备注']
   const records = rows.map(row => [
     row.code, row.name, row.status, row.side === 'buy' ? '买入' : '卖出', row.type === 'market' ? '市价单' : '限价单',
     row.price === null ? '--' : formatPrice(row.price, row.market), number(row.quantity), exportedOrderAmount(row), row.reportQuantity ? number(row.reportQuantity) : '--', row.filledQuantity ? number(row.filledQuantity) : '--', row.filledPrice === null ? '--' : formatPrice(row.filledPrice, row.market), filledAmount(row), row.canceledQuantity ? number(row.canceledQuantity) : '--', exportedCanceledAmount(row),
-    money(row.frozenMargin || 0), `${row.marginRate || 0}%`, row.feedback || '--', row.orderNo, row.orderTime, accountLabel(row.account), marketLabel(row.market), row.openClose === '开' ? '开仓' : '平仓', row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', row.traderRemark || '--',
+    money(row.frozenMargin || 0), `${row.marginRate || 0}%`, orderActivity(row), row.orderNo, row.orderTime, accountLabel(row.account), marketLabel(row.market), row.openClose === '开' ? '开仓' : '平仓', row.orderType || '--', row.algorithm || '--', row.orderRemark || '--',
   ])
   downloadCsv('订单记录.csv', header, records)
 }
-function exportTrades(rows = trades.value) {
-  const header = ['方向', '证券代码', '证券名称', '成交价格', '成交数量', '成交金额', '成交时间', '订单时间', '成交编号', '订单编号', '交易日期', '下单账户', '市场', '备注', '开平方向', '订单类型', '执行算法', '下单备注', '交易员备注']
+function exportTrades(rows = sortedTrades.value) {
+  const header = ['方向', '证券代码', '证券名称', '成交均价', '成交数量', '成交金额', '成交时间', '订单时间', '成交编号', '订单编号', '交易日期', '下单账户', '市场', '订单动态', '开平方向', '订单类型', '执行算法', '下单备注']
   const records = rows.map(row => [
     row.side === 'buy' ? '买入' : '卖出', row.code, row.name, formatPrice(row.filledPrice, row.market), number(row.filledQuantity), money(row.filledAmount),
-    timeLabel(row.filledTime), timeLabel(row.orderTime), row.tradeNo, row.entrustNo, row.tradeDate, accountLabel(row.account), marketLabel(row.market), row.feedback || '--', row.openClose === '开' ? '开仓' : '平仓', row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', row.traderRemark || '--',
+    timeLabel(row.filledTime), timeLabel(row.orderTime), row.tradeNo, row.entrustNo, row.tradeDate, accountLabel(row.account), marketLabel(row.market), orderActivity(row), row.openClose === '开' ? '开仓' : '平仓', row.orderType || '--', row.algorithm || '--', row.orderRemark || '--',
   ])
   downloadCsv('成交记录.csv', header, records)
 }
@@ -545,7 +583,7 @@ function exportRowDate(target, row) {
   return row.submittedAt
 }
 function exportRowsFor(target, dateRange = []) {
-  const rows = target === 'positions' ? sortedRows.value : target === 'orders' ? orders.value : target === 'trades' ? trades.value : trsPoolExportRows.value
+  const rows = target === 'positions' ? sortedRows.value : target === 'orders' ? orders.value : target === 'trades' ? sortedTrades.value : trsPoolExportRows.value
   const [startDate, endDate] = dateRange
   if (!startDate || !endDate) return rows
   return rows.filter(row => {
@@ -561,9 +599,43 @@ function confirmExport(target, dateRange = []) {
   if (target === 'trsPool') exportTrsPoolOrders(rows)
 }
 function refreshTable() { tableRefreshKey.value += 1 }
+function isCopyableIdentifier(column) { return copyableIdentifierFields.has(column?.property) }
+function identifierText(row, column) {
+  if (column?.property === 'code') return row?.code ? `${row.code}.${row.market}` : ''
+  return String(row?.[column?.property] ?? '').trim()
+}
+async function copyIdentifier(row, column) {
+  const value = identifierText(row, column)
+  if (!value) return
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value)
+    else {
+      const input = document.createElement('textarea')
+      input.value = value
+      input.setAttribute('readonly', '')
+      input.style.cssText = 'position:fixed;opacity:0;pointer-events:none'
+      document.body.append(input)
+      input.select()
+      const copied = document.execCommand('copy')
+      input.remove()
+      if (!copied) throw new Error('copy failed')
+    }
+    ElMessage.success(`已复制：${value}`)
+  } catch {
+    ElMessage.error('复制失败，请检查浏览器剪贴板权限')
+  }
+}
+function copyableIdentifierCellClass({ column }) { return isCopyableIdentifier(column) ? 'copyable-identifier-cell' : '' }
+function handleTableCellDoubleClick(row, column) {
+  if (isCopyableIdentifier(column)) copyIdentifier(row, column)
+}
+function handlePositionRowDoubleClick(row, column) {
+  if (!isCopyableIdentifier(column)) loadPositionIntoTicket(row)
+}
 function chooseDock(value) { dock.value = value; if(value === 'floating' && workspace.value) floating.value = {x:Math.max(0, workspace.value.clientWidth-350),y:12,width:340,height:Math.min(650,workspace.value.clientHeight-12)} }
 function toggleSort(prop) { const current = sortState.value; sortState.value = current.prop !== prop || current.direction === null ? { prop, direction: 'ascending' } : current.direction === 'ascending' ? { prop, direction: 'descending' } : { prop: null, direction: null } }
 function toggleOrderSort(prop) { const current = orderSortState.value; orderSortState.value = current.prop !== prop || current.direction === null ? { prop, direction: 'ascending' } : current.direction === 'ascending' ? { prop, direction: 'descending' } : { prop: null, direction: null } }
+function toggleTradeSort(prop) { const current = tradeSortState.value; tradeSortState.value = current.prop !== prop || current.direction === null ? { prop, direction: 'ascending' } : current.direction === 'ascending' ? { prop, direction: 'descending' } : { prop: null, direction: null } }
 function toggleOrderStatus(status) { const selected = orderFilters.value.status; orderFilters.value.status = selected.includes(status) ? selected.filter(value => value !== status) : [...selected, status] }
 function selectAllOrderStatuses() { orderFilters.value.status = [...orderStatusMachine] }
 function invertOrderStatuses() { const selected = new Set(orderFilters.value.status); orderFilters.value.status = orderStatusMachine.filter(status => !selected.has(status)) }
@@ -654,6 +726,7 @@ function recordHtDealInEquity({ order, deal, quantity }) {
     filledQuantity, filledPrice: customerPrice, feedback: `HT 订单 ${order.orderNo} 成交已同步。`, orderTime: timestampNow(),
     orderRemark: `来源 HT 订单：${order.orderNo}`, traderRemark: '已同步成交结果',
   }), ...demoOrders.value.filter(item => item.id !== id)]
+  publishOrderActivityMessage(demoOrders.value[0])
   tab.value = 'trades'
   publishTransactionMessage({ name: order.underlying, code, status: '订单全部成交', quantity: filledQuantity, price: customerPrice, title: 'HT订单成交已同步' })
 }
@@ -686,7 +759,9 @@ function acceptClosePosition(order) {
 }
 function acceptChaseOrder(order) {
   if (!systemRunning.value) return
-  demoOrders.value.unshift(enrichOrder(order))
+  const nextOrder = enrichOrder(order)
+  demoOrders.value.unshift(nextOrder)
+  publishOrderActivityMessage(nextOrder)
   tab.value = 'orders'
 }
 function openOrderHistory(row) { historyRecord.value = row; historyVisible.value = true }
@@ -720,6 +795,7 @@ function confirmConvertToManual() {
   row.orderRemark = conversionRemark.value.trim()
   row.convertedToManualAt = timestampNow()
   row.feedback = `${row.feedback || '系统处理异常'}；已转为手工单，待交易员处理`
+  publishOrderActivityMessage(row)
   publishTransactionMessage({
     name: row.name, code: row.code, status: '已转为手工单', quantity: row.quantity,
     quantityLabel: '订单数量', price: row.price, priceLabel: '订单价格', title: '订单已转手工单',
@@ -770,6 +846,7 @@ function acceptAmendOrder(amendment) {
   } else {
     row.feedback = '改单已受理：已调整委托价格'
   }
+  publishOrderActivityMessage(row)
   publishTransactionMessage({
     name: row.name, code: row.code, status: `${amendment.operation}申请已提交`, quantity: Math.abs(delta) || amendment.quantity,
     quantityLabel: amendment.operation === '追单' ? '追单数量' : amendment.operation === '部撤' ? '部撤数量' : '订单数量',
@@ -798,6 +875,7 @@ function confirmCancelOrder() {
   const canCancel = canOperateOrder(row)
   if (!canCancel) {
     row.feedback = '撤单失败'
+    publishOrderActivityMessage(row)
     publishOrderOperationMessage(row, '撤单', false)
     cancelOrderVisible.value = false
     cancelingOrder.value = null
@@ -808,6 +886,7 @@ function confirmCancelOrder() {
   row.reportQuantity = 0
   row.frozenMargin = 0
   row.feedback = '撤单成功'
+  publishOrderActivityMessage(row)
   publishOrderOperationMessage({ ...row, quantity: row.canceledQuantity, filledQuantity: 0 }, '撤单', true)
   cancelOrderVisible.value = false
   cancelingOrder.value = null
@@ -819,6 +898,7 @@ function updateViewportWidth() { viewportWidth.value = window.innerWidth }
 onMounted(() => {
   showHeaderNotice.value = localStorage.getItem(headerNoticeKey) !== '1'
   window.addEventListener('resize', updateViewportWidth)
+  seedOrderActivityMessages()
   showEmergency(messages.value.find(item => item.urgent))
   window.setTimeout(() => showTransactionToast(messages.value.find(item => item.trade)), 350)
 })
@@ -877,22 +957,22 @@ onBeforeUnmount(() => {
         <header class="positions-tabs"><button :class="{active:tab==='positions'}" @click="tab='positions'">所有持仓<span>({{ allRows.length }})</span></button><button :class="{active:tab==='orders'}" @click="tab='orders'">所有订单<span>({{ orders.length }})</span></button><button :class="{active:tab==='trades'}" @click="tab='trades'">所有成交<span>({{ trades.length }})</span></button><el-select v-model="selectedAccountIds" class="global-account-filter" multiple collapse-tags :max-collapse-tags="1" placeholder="下单账户" aria-label="全局下单账户筛选" popper-class="variant-popper global-account-popper" :offset="2" @visible-change="handleGlobalAccountVisible" @change="updateGlobalAccountSelection"><template #header><div class="account-dropdown-search" @click.stop><el-input v-model="globalAccountSearch" :prefix-icon="Search" placeholder="搜索下单账户" clearable /></div></template><el-option label="全部账户" :value="allAccountsValue" /><el-option v-for="option in filteredGlobalAccounts" :key="option.id" :label="accountLabel(option.id)" :value="option.id" /></el-select><button v-if="collapsed" class="workspace-restore-ticket" @click="collapsed=false"><img class="restore-panel-icon" :src="assetUrl('panel-expand.svg')" alt=""><span class="restore-panel-label">展开下单面板</span></button></header>
         <template v-if="tab==='positions'">
           <div class="position-filters"><el-input v-model="query" :prefix-icon="Search" placeholder="代码 / 名称" aria-label="搜索持仓" clearable /><el-select v-model="market" aria-label="持仓市场" popper-class="variant-popper" :offset="2"><el-option label="全部市场" value="ALL"/><el-option label="深市" value="SZ"/><el-option label="沪市" value="SH"/></el-select><el-select v-model="positionType" placeholder="多空方向" aria-label="多空方向筛选" popper-class="variant-popper" :offset="2"><el-option label="全部" value="ALL"/><el-option label="多头" value="多"/><el-option label="空头" value="空"/></el-select><el-button class="filter-query" @click="applyFilters">查询</el-button><el-button link @click="clearFilters">重置</el-button><div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新持仓" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="持仓" @export="dateRange => confirmExport('positions', dateRange)"><button class="export-positions" aria-label="导出持仓" title="选择时间范围后导出当前持仓"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div></div>
-          <TradingTable :key="`positions-${tableRefreshKey}`" ref="table" class="original-fields" :data="sortedRows" height="100%" :fit="false" row-key="id" empty-text="无匹配持仓，请调整或重置筛选" @row-dblclick="loadPositionIntoTicket">
+          <TradingTable :key="`positions-${tableRefreshKey}`" ref="table" class="original-fields" :data="sortedRows" height="100%" :fit="false" row-key="id" empty-text="无匹配持仓，请调整或重置筛选" :cell-class-name="copyableIdentifierCellClass" @cell-dblclick="handleTableCellDoubleClick" @row-dblclick="handlePositionRowDoubleClick">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
             <template v-for="columnKey in visibleColumnKeys" :key="columnKey">
               <el-table-column v-if="columnKey === 'direction'" prop="direction" label="多空方向" width="66" align="center" header-align="center" class-name="direction-column" label-class-name="direction-column"><template #default="{row}"><span class="direction-chip" :class="row.direction === '多' ? 'long' : 'short'"><img :src="assetUrl(row.direction === '多' ? 'direction-long.svg' : 'direction-short.svg')" alt="">{{ row.direction === '多' ? '做多' : '做空' }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'code'" prop="code" width="80"><template #header><SortHeader label="证券代码" :direction="sortState.prop === 'code' ? sortState.direction : null" @sort="toggleSort('code')" /></template><template #default="{row}">{{ row.code }}.{{ row.market }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'name'" prop="name" width="76"><template #header><SortHeader label="证券名称" :direction="sortState.prop === 'name' ? sortState.direction : null" @sort="toggleSort('name')" /></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'price'" prop="price" width="126" align="right" header-align="right"><template #header><SortHeader label="成本价/最新价" numeric :direction="sortState.prop === 'price' ? sortState.direction : null" @sort="toggleSort('price')" /></template><template #default="{row}"><span class="dim">{{ formatPrice(row.cost, row.market) }}</span> / <span :class="row.change>=0?'up':'down'">{{ formatPrice(row.price, row.market) }}</span></template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'opening'" prop="opening" width="76" align="right" header-align="right"><template #header><SortHeader label="期初数量" numeric :direction="sortState.prop === 'opening' ? sortState.direction : null" @sort="toggleSort('opening')" /></template><template #default="{row}">{{ number(row.opening) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'holdingQty'" prop="qty" width="100" align="right" header-align="right"><template #header><SortHeader label="持仓数量" numeric :direction="sortState.prop === 'qty' ? sortState.direction : null" @sort="toggleSort('qty')" /></template><template #default="{row}">{{ number(row.qty) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'available'" prop="available" width="76" align="right" header-align="right"><template #header><SortHeader label="可用数量" numeric :direction="sortState.prop === 'available' ? sortState.direction : null" @sort="toggleSort('available')" /></template><template #default="{row}">{{ number(row.available) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'valueWan'" prop="value" width="96" align="right" header-align="right"><template #header><SortHeader label="市值" numeric :direction="sortState.prop === 'value' ? sortState.direction : null" @sort="toggleSort('value')" /></template><template #default="{row}">{{ money(row.value) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'marginOccupied'" prop="marginOccupied" width="88" align="right" header-align="right"><template #header><SortHeader label="占用保证金" numeric :direction="sortState.prop === 'marginOccupied' ? sortState.direction : null" @sort="toggleSort('marginOccupied')" /></template><template #default="{row}">{{ money(row.marginOccupied) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'opening'" prop="opening" width="88" align="right" header-align="right"><template #header><SortHeader label="期初数量" numeric :direction="sortState.prop === 'opening' ? sortState.direction : null" @sort="toggleSort('opening')" /></template><template #default="{row}">{{ sharesWithUnit(row.opening) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'holdingQty'" prop="qty" width="112" align="right" header-align="right"><template #header><SortHeader label="持仓数量" numeric :direction="sortState.prop === 'qty' ? sortState.direction : null" @sort="toggleSort('qty')" /></template><template #default="{row}">{{ sharesWithUnit(row.qty) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'available'" prop="available" width="88" align="right" header-align="right"><template #header><SortHeader label="可用数量" numeric :direction="sortState.prop === 'available' ? sortState.direction : null" @sort="toggleSort('available')" /></template><template #default="{row}">{{ sharesWithUnit(row.available) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'valueWan'" prop="value" width="112" align="right" header-align="right"><template #header><SortHeader label="市值" numeric :direction="sortState.prop === 'value' ? sortState.direction : null" @sort="toggleSort('value')" /></template><template #default="{row}">{{ moneyWithUnit(row.value) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'marginOccupied'" prop="marginOccupied" width="104" align="right" header-align="right"><template #header><SortHeader label="占用保证金" numeric :direction="sortState.prop === 'marginOccupied' ? sortState.direction : null" @sort="toggleSort('marginOccupied')" /></template><template #default="{row}">{{ moneyWithUnit(row.marginOccupied) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'marginRate'" prop="marginRate" width="76" align="right" header-align="right"><template #header><SortHeader label="保证金率" numeric :direction="sortState.prop === 'marginRate' ? sortState.direction : null" @sort="toggleSort('marginRate')" /></template><template #default="{row}">{{ row.marginRate.toFixed(2) }}%</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'totalProfit'" prop="totalProfit" width="96" align="right" header-align="right"><template #header><span class="profit-heading"><SortHeader label="总盈亏" numeric :direction="sortState.prop === 'totalProfit' ? sortState.direction : null" @sort="toggleSort('totalProfit')" /><el-tooltip content="总盈亏 = 实现盈亏 + 浮动盈亏" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="总盈亏说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></span></template><template #default="{row}"><span :class="row.totalProfit >= 0 ? 'up' : 'down'">{{ money(row.totalProfit) }}</span></template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'dailyRealizedProfit'" prop="dailyRealizedProfit" width="96" align="right" header-align="right"><template #header><SortHeader label="实现盈亏" numeric :direction="sortState.prop === 'dailyRealizedProfit' ? sortState.direction : null" @sort="toggleSort('dailyRealizedProfit')" /></template><template #default="{row}"><span :class="row.dailyRealizedProfit >= 0 ? 'up' : 'down'">{{ money(row.dailyRealizedProfit) }}</span></template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'floatingProfit'" prop="floatingProfit" width="88" align="right" header-align="right"><template #header><SortHeader label="浮动盈亏" numeric :direction="sortState.prop === 'floatingProfit' ? sortState.direction : null" @sort="toggleSort('floatingProfit')" /></template><template #default="{row}"><span :class="row.floatingProfit >= 0 ? 'up' : 'down'">{{ money(row.floatingProfit) }}</span></template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'totalProfit'" prop="totalProfit" width="112" align="right" header-align="right"><template #header><span class="profit-heading"><SortHeader label="总盈亏" numeric :direction="sortState.prop === 'totalProfit' ? sortState.direction : null" @sort="toggleSort('totalProfit')" /><el-tooltip content="总盈亏 = 实现盈亏 + 浮动盈亏" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="总盈亏说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></span></template><template #default="{row}"><span :class="row.totalProfit >= 0 ? 'up' : 'down'">{{ moneyWithUnit(row.totalProfit) }}</span></template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'dailyRealizedProfit'" prop="dailyRealizedProfit" width="112" align="right" header-align="right"><template #header><SortHeader label="实现盈亏" numeric :direction="sortState.prop === 'dailyRealizedProfit' ? sortState.direction : null" @sort="toggleSort('dailyRealizedProfit')" /></template><template #default="{row}"><span :class="row.dailyRealizedProfit >= 0 ? 'up' : 'down'">{{ moneyWithUnit(row.dailyRealizedProfit) }}</span></template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'floatingProfit'" prop="floatingProfit" width="112" align="right" header-align="right"><template #header><SortHeader label="浮动盈亏" numeric :direction="sortState.prop === 'floatingProfit' ? sortState.direction : null" @sort="toggleSort('floatingProfit')" /></template><template #default="{row}"><span :class="row.floatingProfit >= 0 ? 'up' : 'down'">{{ moneyWithUnit(row.floatingProfit) }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'currency'" prop="currency" label="币种" width="56" />
               <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="132"><template #default="{row}">{{ accountLabel(row.account) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'market'" prop="market" label="市场" width="48"><template #default="{row}">{{ row.market === 'SZ' ? '深市' : '沪市' }}</template></el-table-column>
@@ -915,7 +995,7 @@ onBeforeUnmount(() => {
             <el-button class="filter-query" @click="applyOrderFilters">查询</el-button><el-button link @click="clearOrderFilters">重置</el-button>
             <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新订单记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="订单" @export="dateRange => confirmExport('orders', dateRange)"><button class="export-orders" aria-label="导出订单记录" title="选择时间范围后导出当前筛选结果"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div>
           </div>
-          <TradingTable :key="`orders-${tableRefreshKey}`" class="original-fields orders-table" :data="sortedOrders" :row-class-name="orderRowClassName" height="100%" :fit="false" empty-text="暂无订单记录">
+          <TradingTable :key="`orders-${tableRefreshKey}`" class="original-fields orders-table" :data="sortedOrders" :row-class-name="orderRowClassName" height="100%" :fit="false" empty-text="暂无订单记录" :cell-class-name="copyableIdentifierCellClass" @cell-dblclick="handleTableCellDoubleClick">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
             <template v-for="columnKey in orderVisibleColumnKeys" :key="columnKey">
               <el-table-column v-if="columnKey === 'code'" prop="code" label="证券代码" width="68"/>
@@ -925,24 +1005,23 @@ onBeforeUnmount(() => {
               <el-table-column v-else-if="columnKey === 'side'" label="方向" width="64" align="left" header-align="left"><template #default="{row}"><span :class="row.side==='buy'?'up':'down'">{{ row.side==='buy'?'买入':'卖出' }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'attribute'" prop="attribute" label="订单属性" width="64"><template #default="{row}">{{ row.type === 'market' ? '市价单' : '限价单' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'price'" prop="price" width="88" align="right" header-align="right" class-name="order-price-gap-column" label-class-name="order-price-gap-column"><template #header><SortHeader label="订单价格" numeric :direction="orderSortState.prop === 'price' ? orderSortState.direction : null" @sort="toggleOrderSort('price')" /></template><template #default="{row}">{{ row.price === null ? '--' : formatPrice(row.price, row.market) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'orderValueNumber'" prop="quantity" width="88" align="right" header-align="right"><template #header><SortHeader label="订单数量/金额" numeric :direction="orderSortState.prop === 'quantity' ? orderSortState.direction : null" @sort="toggleOrderSort('quantity')" /></template><template #default="{row}">{{ number(row.quantity) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'reportQuantity'" prop="reportQuantity" label="挂单数量" width="76" align="right" header-align="right"><template #default="{row}">{{ row.reportQuantity ? number(row.reportQuantity) : '--' }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'orderValueNumber'" prop="quantity" width="100" align="right" header-align="right"><template #header><SortHeader label="订单数量/金额" numeric :direction="orderSortState.prop === 'quantity' ? orderSortState.direction : null" @sort="toggleOrderSort('quantity')" /></template><template #default="{row}">{{ orderValueWithUnit(row) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'reportQuantity'" prop="reportQuantity" label="挂单数量" width="88" align="right" header-align="right"><template #default="{row}">{{ row.reportQuantity ? sharesWithUnit(row.reportQuantity) : '--' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'fillProgress'" label="成交进度" width="68" align="right" header-align="right"><template #header><SortHeader label="成交进度" numeric :direction="orderSortState.prop === 'fillProgress' ? orderSortState.direction : null" @sort="toggleOrderSort('fillProgress')" /></template><template #default="{row}">{{ fillProgress(row) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'filledQuantity'" prop="filledQuantity" width="76" align="right" header-align="right"><template #header><SortHeader label="已成数量" numeric :direction="orderSortState.prop === 'filledQuantity' ? orderSortState.direction : null" @sort="toggleOrderSort('filledQuantity')" /></template><template #default="{row}">{{ row.filledQuantity ? number(row.filledQuantity) : '--' }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledQuantity'" prop="filledQuantity" width="88" align="right" header-align="right"><template #header><SortHeader label="已成数量" numeric :direction="orderSortState.prop === 'filledQuantity' ? orderSortState.direction : null" @sort="toggleOrderSort('filledQuantity')" /></template><template #default="{row}">{{ row.filledQuantity ? sharesWithUnit(row.filledQuantity) : '--' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'filledPrice'" prop="filledPrice" width="76" align="right" header-align="right"><template #header><SortHeader label="成交均价" numeric :direction="orderSortState.prop === 'filledPrice' ? orderSortState.direction : null" @sort="toggleOrderSort('filledPrice')" /></template><template #default="{row}">{{ row.filledPrice === null ? '--' : formatPrice(row.filledPrice, row.market) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'filledAmount'" label="成交金额" width="72" align="right" header-align="right"><template #header><SortHeader label="成交金额" numeric :direction="orderSortState.prop === 'filledAmount' ? orderSortState.direction : null" @sort="toggleOrderSort('filledAmount')" /></template><template #default="{row}">{{ filledAmount(row) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledAmount'" label="成交金额" width="100" align="right" header-align="right"><template #header><SortHeader label="成交金额" numeric :direction="orderSortState.prop === 'filledAmount' ? orderSortState.direction : null" @sort="toggleOrderSort('filledAmount')" /></template><template #default="{row}">{{ filledAmountWithUnit(row) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'canceledValue'" label="撤单数量/金额" width="96" align="right" header-align="right"><template #header><SortHeader label="撤单数量/金额" numeric :direction="orderSortState.prop === 'canceledValue' ? orderSortState.direction : null" @sort="toggleOrderSort('canceledValue')" /></template><template #default="{row}">{{ canceledOrderValue(row) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="132"><template #default="{row}">{{ accountLabel(row.account) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'frozenMargin'" prop="frozenMargin" label="冻结保证金" width="84" align="right" header-align="right"><template #header><SortHeader label="冻结保证金" numeric :direction="orderSortState.prop === 'frozenMargin' ? orderSortState.direction : null" @sort="toggleOrderSort('frozenMargin')" /></template><template #default="{row}">{{ money(row.frozenMargin || 0) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'frozenMargin'" prop="frozenMargin" label="冻结保证金" width="104" align="right" header-align="right" class-name="frozen-margin-column" label-class-name="frozen-margin-column"><template #header><SortHeader label="冻结保证金" numeric :direction="orderSortState.prop === 'frozenMargin' ? orderSortState.direction : null" @sort="toggleOrderSort('frozenMargin')" /></template><template #default="{row}">{{ moneyWithUnit(row.frozenMargin || 0) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'marginRate'" prop="marginRate" label="保证金率" width="64" align="right" header-align="right"><template #header><SortHeader label="保证金率" numeric :direction="orderSortState.prop === 'marginRate' ? orderSortState.direction : null" @sort="toggleOrderSort('marginRate')" /></template><template #default="{row}">{{ row.marginRate || 0 }}%</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'feedback'" prop="feedback" label="备注" width="104" show-overflow-tooltip><template #default="{row}">{{ row.feedback || '--' }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'feedback'" prop="feedback" label="订单动态" width="168" show-overflow-tooltip><template #default="{row}">{{ orderActivity(row) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderNo'" prop="orderNo" label="订单编号" width="112"/>
               <el-table-column v-else-if="columnKey === 'orderTime'" prop="orderTime" label="订单时间" width="80"><template #default="{row}">{{ timeLabel(row.orderTime) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'market'" prop="market" label="市场" width="48"><template #default="{row}">{{ marketLabel(row.market) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderType'" prop="orderType" label="订单类型" width="64"><template #default="{row}"><span class="order-type-tag" :class="row.orderType === '手工单' ? 'is-manual' : 'is-system'">{{ row.orderType || '--' }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'algorithm'" prop="algorithm" label="执行算法" width="64" align="center" header-align="center"><template #default="{row}">{{ row.algorithm || '--' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderRemark'" prop="orderRemark" label="下单备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.orderRemark || '--' }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'traderRemark'" prop="traderRemark" label="交易员备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.traderRemark || '--' }}</template></el-table-column>
             </template>
             <el-table-column label="历史" width="52" align="center" header-align="center" class-name="history-column" label-class-name="history-column"><template #default="{row}"><button type="button" class="history-view" @click.stop="openOrderHistory(row)">查看</button></template></el-table-column>
             <el-table-column label="操作" width="96" fixed="right" align="center" class-name="operation-column" label-class-name="operation-column"><template #header><span class="operation-column-header"><span>操作</span><ColumnConfigPopover v-model="orderVisibleColumnKeys" :options="orderColumnOptions" :defaults="orderColumnDefaults" /></span></template><template #default="{row}"><div class="order-row-actions"><el-tooltip v-if="canConvertToManual(row)" content="转手工单" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-convert-manual" aria-label="转手工单" @click="openConvertToManual(row)">转</button></span></el-tooltip><el-tooltip :content="orderActionLabel(row, '追加订单')" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-chase-action" :aria-label="orderActionLabel(row, '追加订单')" :disabled="!canChaseOrder(row)" @click="openOrderChase(row)">追</button></span></el-tooltip><template v-if="!canConvertToManual(row)"><el-tooltip :content="orderActionLabel(row, '修改订单')" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-amend-action" :aria-label="orderActionLabel(row, '修改订单')" :disabled="!canAmendOrder(row)" @click="openAmendOrder(row)">改</button></span></el-tooltip><el-tooltip :content="orderActionLabel(row, '撤单')" placement="top" :show-after="300" popper-class="variant-popper order-action-popper"><span class="operation-tooltip"><button type="button" class="order-cancel-action" :aria-label="orderActionLabel(row, '撤单')" :disabled="!canOperateOrder(row)" @click="openCancelOrder(row)">撤</button></span></el-tooltip></template></div></template></el-table-column>
@@ -957,16 +1036,16 @@ onBeforeUnmount(() => {
             <el-button class="filter-query" @click="applyTradeFilters">查询</el-button><el-button link @click="clearTradeFilters">重置</el-button>
             <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新成交记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="成交" @export="dateRange => confirmExport('trades', dateRange)"><button class="export-orders" aria-label="导出成交记录" title="选择时间范围后导出当前筛选结果"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div>
           </div>
-          <TradingTable :key="`trades-${tableRefreshKey}`" class="original-fields orders-table trades-table" :data="trades" height="100%" :fit="false" empty-text="暂无成交记录">
+          <TradingTable :key="`trades-${tableRefreshKey}`" class="original-fields orders-table trades-table" :data="sortedTrades" height="100%" :fit="false" empty-text="暂无成交记录" :cell-class-name="copyableIdentifierCellClass" @cell-dblclick="handleTableCellDoubleClick">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
             <template v-for="columnKey in tradeVisibleColumnKeys" :key="columnKey">
               <el-table-column v-if="columnKey === 'side'" prop="side" label="方向" width="64" align="left" header-align="left"><template #default="{row}"><span :class="row.side === 'buy' ? 'up' : 'down'">{{ row.side === 'buy' ? '买入' : '卖出' }}</span></template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'openClose'" prop="openClose" label="开平方向" width="64" align="right" header-align="right" class-name="plain-right-column"><template #default="{row}">{{ row.openClose === '开' ? '开仓' : '平仓' }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'openClose'" prop="openClose" label="开平方向" width="64" align="left" header-align="left"><template #default="{row}">{{ row.openClose === '开' ? '开仓' : '平仓' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'code'" prop="code" label="证券代码" width="68" />
               <el-table-column v-else-if="columnKey === 'name'" prop="name" label="证券名称" width="68" />
-              <el-table-column v-else-if="columnKey === 'filledPrice'" prop="filledPrice" label="成交价格" width="76" align="right" header-align="right"><template #default="{row}">{{ formatPrice(row.filledPrice, row.market) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'filledQuantity'" prop="filledQuantity" label="成交数量" width="76" align="right" header-align="right"><template #default="{row}">{{ number(row.filledQuantity) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'filledAmount'" prop="filledAmount" label="成交金额" width="76" align="right" header-align="right"><template #default="{row}">{{ money(row.filledAmount) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledPrice'" prop="filledPrice" width="76" align="right" header-align="right"><template #header><SortHeader label="成交均价" numeric :direction="tradeSortState.prop === 'filledPrice' ? tradeSortState.direction : null" @sort="toggleTradeSort('filledPrice')" /></template><template #default="{row}">{{ formatPrice(row.filledPrice, row.market) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledQuantity'" prop="filledQuantity" width="88" align="right" header-align="right"><template #header><SortHeader label="成交数量" numeric :direction="tradeSortState.prop === 'filledQuantity' ? tradeSortState.direction : null" @sort="toggleTradeSort('filledQuantity')" /></template><template #default="{row}">{{ sharesWithUnit(row.filledQuantity) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledAmount'" prop="filledAmount" width="100" align="right" header-align="right"><template #header><SortHeader label="成交金额" numeric :direction="tradeSortState.prop === 'filledAmount' ? tradeSortState.direction : null" @sort="toggleTradeSort('filledAmount')" /></template><template #default="{row}">{{ moneyWithUnit(row.filledAmount) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'filledTime'" prop="filledTime" label="成交时间" width="80"><template #default="{row}">{{ timeLabel(row.filledTime) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderTime'" prop="orderTime" label="订单时间" width="80"><template #default="{row}">{{ timeLabel(row.orderTime) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'tradeNo'" prop="tradeNo" label="成交编号" width="112" />
@@ -974,11 +1053,10 @@ onBeforeUnmount(() => {
               <el-table-column v-else-if="columnKey === 'tradeDate'" prop="tradeDate" label="交易日期" width="90" />
               <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="132"><template #default="{row}">{{ accountLabel(row.account) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'market'" prop="market" label="市场" width="48"><template #default="{row}">{{ marketLabel(row.market) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'feedback'" prop="feedback" label="备注" width="104" show-overflow-tooltip><template #default="{row}">{{ row.feedback || '--' }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'orderType'" prop="orderType" label="订单类型" width="64"><template #default="{row}"><span class="order-type-tag" :class="row.orderType === '手工单' ? 'is-manual' : 'is-system'">{{ row.orderType || '--' }}</span></template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'feedback'" prop="feedback" label="订单动态" width="168" show-overflow-tooltip><template #default="{row}">{{ orderActivity(row) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'orderType'" prop="orderType" label="订单类型" width="64" align="left" header-align="left"><template #default="{row}"><span class="order-type-tag" :class="row.orderType === '手工单' ? 'is-manual' : 'is-system'">{{ row.orderType || '--' }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'algorithm'" prop="algorithm" label="执行算法" width="64" align="center" header-align="center"><template #default="{row}">{{ row.algorithm || '--' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderRemark'" prop="orderRemark" label="下单备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.orderRemark || '--' }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'traderRemark'" prop="traderRemark" label="交易员备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.traderRemark || '--' }}</template></el-table-column>
             </template>
             <el-table-column label="历史" width="52" align="center" header-align="center" class-name="history-column" label-class-name="history-column"><template #default="{row}"><button type="button" class="history-view" @click.stop="openOrderHistory(row)">查看</button></template></el-table-column>
             <el-table-column width="22" fixed="right" align="center" header-align="center" class-name="column-config-column" label-class-name="column-config-column"><template #header><ColumnConfigPopover v-model="tradeVisibleColumnKeys" :options="tradeColumnOptions" :defaults="tradeColumnDefaults" /></template></el-table-column>
