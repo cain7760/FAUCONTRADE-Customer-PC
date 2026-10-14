@@ -20,7 +20,7 @@ function updateQuote(value) { quote.value = value; emit('quote', value) }
     <div v-if="position && account" class="cp-layout">
       <section class="cp-market"><OrderBook :symbol="position" :ia-ratio="iaRatio" hide-header hide-ticks @quote="updateQuote" /></section>
       <section class="cp-order">
-        <slot v-if="!hideMetrics" name="metrics"><div class="cp-metrics"><div><span>持仓股数(股)</span><b>{{ number(position.qty) }}</b></div><div><span>持仓市值(CNY)</span><b>{{ marketValue }}</b></div><div><span>可平股数(股)</span><b>{{ number(position.available) }}</b></div><div><span>成本价(CNY)</span><b>{{ money(position.cost) }}</b></div></div></slot>
+        <slot v-if="!hideMetrics" name="metrics"><div class="cp-metrics"><div><span>持仓股数(股)</span><b>{{ number(position.qty) }}</b></div><div><span>持仓市值(CNY)</span><b>{{ marketValue }}</b></div><div><span>可平股数(股)</span><b>{{ number(position.available) }}</b></div><div><span>持仓均价(CNY)</span><b>{{ money(position.cost) }}</b></div></div></slot>
         <slot name="order" :quote="quote" />
       </section>
     </div>

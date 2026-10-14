@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Close, Refresh } from '@element-plus/icons-vue'
 import { money, number, price as formatPrice } from '../variantData'
 import BaseDialog from '../../../components/BaseDialog.vue'
-import TradingTable from './TradingTable.vue'
+import OrderHistoryRecordsTable from './OrderHistoryRecordsTable.vue'
 
 const props = defineProps({ modelValue: Boolean, record: Object })
 const emit = defineEmits(['update:modelValue'])
@@ -92,7 +92,7 @@ function exportHistory() {
         <div class="history-summary-actions"><button type="button" class="history-refresh" aria-label="刷新历史记录" @click="refreshHistory"><el-icon><Refresh /></el-icon></button><button type="button" class="history-export" @click="exportHistory">导出历史</button></div>
       </section>
       <section class="history-records">
-        <TradingTable :key="refreshKey" :data="pagedRecords" class="history-records-table"><el-table-column prop="operator" label="操作人" width="104" /><el-table-column prop="time" label="操作时间" width="150" /><el-table-column prop="type" label="操作类型" width="104" /><el-table-column prop="content" label="操作内容" min-width="220" /></TradingTable>
+        <OrderHistoryRecordsTable :key="refreshKey" :records="pagedRecords" />
         <footer class="history-records-footer"><span>共{{ records.length }}条</span><el-pagination v-model:current-page="page" :page-size="pageSize" :page-sizes="[10, 20, 50]" :total="records.length" layout="sizes, prev, pager, next" background @size-change="updatePageSize" /></footer>
       </section>
       </section>

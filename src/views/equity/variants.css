@@ -314,7 +314,16 @@
 .asset-large-value{display:inline-flex;align-items:center;gap:4px;color:#e3e6eb;font-size:14px;line-height:24px;font-variant-numeric:tabular-nums}
 .asset-large-value b{font-weight:500}
 .asset-large-value i{padding:0 4px;border-radius:2px;background:#9b7b36;color:#fff2c1;font-style:normal;font-weight:600;line-height:22px}
+.variants-app .ticket-assets.is-portfolio-summary{grid-template-rows:28px minmax(0,1fr);height:142px!important}
+.variants-app .trade-dock.is-portfolio-summary,.variants-app .dock-left .trade-dock.is-portfolio-summary,.variants-app .dock-bottom .trade-dock.is-portfolio-summary,.variants-app .trade-dock.floating.is-portfolio-summary{grid-template-rows:minmax(0,1fr) 142px}
+.variants-app .ticket-assets.is-portfolio-summary>.asset-summary-heading{height:28px!important}
+.variants-app .ticket-assets.is-portfolio-summary .asset-summary-grid{grid-template-rows:repeat(3,minmax(0,1fr));gap:14px!important;padding:2px 12px!important}
+.variants-app .ticket-assets.is-portfolio-summary .asset-summary-grid .asset-metric+.asset-metric{border-top:0!important}
+.variants-app .ticket-assets .asset-number.is-positive{color:var(--ft-color-up-strong)!important}
+.variants-app .ticket-assets .asset-number.is-negative{color:var(--ft-color-down-strong)!important}
+@media(min-width:901px){.variants-app .dock-bottom .ticket-assets.is-portfolio-summary{grid-template-columns:132px repeat(3,minmax(0,1fr))!important;height:58px!important}.variants-app .dock-bottom .trade-dock.is-portfolio-summary{grid-template-rows:minmax(0,1fr) 58px}.variants-app .dock-bottom .ticket-assets.is-portfolio-summary .asset-summary-grid .asset-metric+.asset-metric{border-top:0!important;border-left:1px solid #303338!important}}
 .variants-app .total-heading{display:inline-flex;align-items:center;gap:4px;min-width:0}
+.variants-app .order-activity-heading{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .variants-app .total-help{display:grid;place-items:center;width:13px;height:13px;padding:0;border:0;background:transparent;color:#7f8995;cursor:help}
 .variants-app .total-help:hover{color:#d6b877}
 .variants-app .total-help .el-icon{font-size:12px}
