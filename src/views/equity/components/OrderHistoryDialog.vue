@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { Close, Refresh } from '@element-plus/icons-vue'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { money, number, price as formatPrice } from '../variantData'
 import BaseDialog from '../../../components/BaseDialog.vue'
 import OrderHistoryRecordsTable from './OrderHistoryRecordsTable.vue'
@@ -93,7 +94,7 @@ function exportHistory() {
       </section>
       <section class="history-records">
         <OrderHistoryRecordsTable :key="refreshKey" :records="pagedRecords" />
-        <footer class="history-records-footer"><span>共{{ records.length }}条</span><el-pagination v-model:current-page="page" :page-size="pageSize" :page-sizes="[10, 20, 50]" :total="records.length" layout="sizes, prev, pager, next" background @size-change="updatePageSize" /></footer>
+        <footer class="history-records-footer"><span>共{{ records.length }}条</span><el-config-provider :locale="zhCn"><el-pagination v-model:current-page="page" :page-size="pageSize" :page-sizes="[10, 20, 50]" :total="records.length" layout="sizes, prev, pager, next" background @size-change="updatePageSize" /></el-config-provider></footer>
       </section>
       </section>
     </template>

@@ -6,7 +6,6 @@ import { tradingContextKey } from '../tradingContext'
 import SortHeader from './SortHeader.vue'
 import ColumnConfigPopover from './ColumnConfigPopover.vue'
 import TradingTable from './TradingTable.vue'
-import ExportDataPopover from './ExportDataPopover.vue'
 const { tradeFilters, tradeSortState, tradeVisibleColumnKeys, tradeColumnOptions, tradeColumnDefaults, sortedTrades, tableRefreshKey, copyableIdentifierCellClass, handleTableCellDoubleClick, accountLabel, marketLabel, timeLabel, currencyForRow, sharesWithUnit, orderActivityHint, orderActivity, openOrderHistory, toggleTradeSort, applyTradeFilters, clearTradeFilters, confirmExport, refreshTable } = inject(tradingContextKey)
 </script>
 
@@ -17,7 +16,7 @@ const { tradeFilters, tradeSortState, tradeVisibleColumnKeys, tradeColumnOptions
             <el-select v-model="tradeFilters.openClose" aria-label="开平类型筛选" popper-class="variant-popper" :offset="2"><el-option label="开平类型" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select>
             <el-select v-model="tradeFilters.orderType" aria-label="订单类型筛选" popper-class="variant-popper" :offset="2"><el-option label="订单类型" value="ALL"/><el-option label="系统单" value="系统单"/><el-option label="手工单" value="手工单"/></el-select>
             <el-button class="filter-query" @click="applyTradeFilters">查询</el-button><el-button link @click="clearTradeFilters">重置</el-button>
-            <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新成交记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><ExportDataPopover label="成交" @export="dateRange => confirmExport('trades', dateRange)"><button class="export-orders" aria-label="导出成交记录" title="选择时间范围后导出当前筛选结果"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></ExportDataPopover></div>
+            <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新成交记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><button class="export-orders" aria-label="导出成交记录" title="导出当前成交表格数据" @click="confirmExport('trades')"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></div>
           </div>
           <TradingTable :key="`trades-${tableRefreshKey}`" class="original-fields orders-table trades-table" :data="sortedTrades" height="100%" :fit="false" empty-text="暂无成交记录" :cell-class-name="copyableIdentifierCellClass" @cell-dblclick="handleTableCellDoubleClick">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />

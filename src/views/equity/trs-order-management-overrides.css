@@ -812,6 +812,16 @@
   min-width: 52px;
 }
 
+.algorithm-popper .algorithm-menu-actions .el-button--primary {
+  --el-button-bg-color: #bb984a;
+  --el-button-border-color: #bb984a;
+  --el-button-hover-bg-color: #bb984a;
+  --el-button-hover-border-color: #bb984a;
+  --el-button-active-bg-color: #bb984a;
+  --el-button-active-border-color: #bb984a;
+  --el-button-outline-color: #dfc170;
+}
+
 .algorithm-menu-actions .el-button:not(.el-button--primary) {
   --el-button-bg-color: #272b31;
   --el-button-border-color: #4b535e;

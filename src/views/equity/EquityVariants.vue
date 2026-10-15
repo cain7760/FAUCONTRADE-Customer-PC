@@ -129,12 +129,12 @@ const trsOrderTicketVisible = ref(false)
 const trsOrderRequest = ref(null)
 const orderStatusMachine = ['已撤', '暂停', '完成', '部成', '已报', '待报', '改单中', '异常', '拒绝', '其他']
 const orderStatusOptions = orderStatusMachine.map(status => ({ label: status, value: status }))
-const copyableIdentifierFields = new Set(['code', 'orderNo', 'tradeNo', 'entrustNo'])
-const demoOrderStatuses = [...orderStatusMachine, '暂停', '已报', '待报', '完成', '异常', '其他']
+const copyableIdentifierFields = new Set(['orderNo', 'tradeNo', 'entrustNo'])
+const demoOrderStatuses = [...orderStatusMachine, '暂停', '已报', '待报', '完成', '异常', '其他'].map((status, index) => index === 5 ? '部成' : status)
 const orderActivityHint = '原为反馈信息，仅显示系统反馈；10 月 13 日起，订单动态合并展示系统反馈和交易员备注。'
 const demoOrders = ref(demoOrderStatuses.map((status, index) => {
   const instrument = variantRows[index % variantRows.length]
-  const quantity = (index + 1) * 100
+  const quantity = index === 5 ? 2_000_000 : (index + 1) * 100
   const filledQuantity = status === '完成' ? quantity : status === '部成' ? Math.max(100, Math.floor(quantity / 2 / 100) * 100) : 0
   const price = index % 3 === 1 ? null : instrument.price
   const estimate = (price || instrument.price) * quantity
@@ -547,19 +547,19 @@ function exportPositions(rows = sortedRows.value) {
   downloadCsv('持仓列表.csv', header, records)
 }
 function exportOrders(rows = orders.value) {
-  const header = ['证券代码', '证券名称', '订单状态', '方向', '订单属性', '订单价格', '订单数量', '订单金额', '挂单数量', '已成数量', '成交均价', '成交金额', '撤单数量', '撤单金额', '冻结保证金', '保证金率', '订单动态', '订单编号', '订单时间', '下单账户', '市场', '币种', '开平方向', '订单类型', '执行算法', '下单备注']
+  const header = ['证券代码', '证券名称', '订单状态', '方向', '订单属性', '订单价格', '订单数量', '订单金额', '挂单数量', '已成数量', '成交均价', '成交金额', '撤单数量', '撤单金额', '冻结保证金', '保证金率', '订单编号', '订单时间', '下单账户', '市场', '币种', '订单类型', '执行算法', '下单备注', '订单动态', '开平方向']
   const records = rows.map(row => [
     row.code, row.name, row.status, row.side === 'buy' ? '买入' : '卖出', row.type === 'market' ? '市价单' : '限价单',
     row.price === null ? '--' : formatPrice(row.price, row.market), number(row.quantity), exportedOrderAmount(row), row.reportQuantity ? number(row.reportQuantity) : '--', row.filledQuantity ? number(row.filledQuantity) : '--', row.filledPrice === null ? '--' : formatPrice(row.filledPrice, row.market), filledAmount(row), row.canceledQuantity ? number(row.canceledQuantity) : '--', exportedCanceledAmount(row),
-    money(row.frozenMargin || 0), `${row.marginRate || 0}%`, orderActivity(row), row.orderNo, row.orderTime, accountLabel(row.account), marketLabel(row.market), currencyForRow(row), row.openClose === '开' ? '开仓' : '平仓', row.orderType || '--', row.algorithm || '--', row.orderRemark || '--',
+    money(row.frozenMargin || 0), `${row.marginRate || 0}%`, row.orderNo, row.orderTime, accountLabel(row.account), marketLabel(row.market), currencyForRow(row), row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', orderActivity(row), row.openClose === '开' ? '开仓' : '平仓',
   ])
   downloadCsv('订单记录.csv', header, records)
 }
 function exportTrades(rows = sortedTrades.value) {
-  const header = ['方向', '证券代码', '证券名称', '成交均价', '成交数量', '成交金额', '成交时间', '订单时间', '成交编号', '订单编号', '交易日期', '下单账户', '市场', '币种', '订单动态', '开平方向', '订单类型', '执行算法', '下单备注']
+  const header = ['方向', '证券代码', '证券名称', '成交均价', '成交数量', '成交金额', '成交时间', '订单时间', '成交编号', '订单编号', '交易日期', '下单账户', '市场', '币种', '订单类型', '执行算法', '下单备注', '订单动态', '开平方向']
   const records = rows.map(row => [
     row.side === 'buy' ? '买入' : '卖出', row.code, row.name, formatPrice(row.filledPrice, row.market), number(row.filledQuantity), money(row.filledAmount),
-    timeLabel(row.filledTime), timeLabel(row.orderTime), row.tradeNo, row.entrustNo, row.tradeDate, accountLabel(row.account), marketLabel(row.market), currencyForRow(row), orderActivity(row), row.openClose === '开' ? '开仓' : '平仓', row.orderType || '--', row.algorithm || '--', row.orderRemark || '--',
+    timeLabel(row.filledTime), timeLabel(row.orderTime), row.tradeNo, row.entrustNo, row.tradeDate, accountLabel(row.account), marketLabel(row.market), currencyForRow(row), row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', orderActivity(row), row.openClose === '开' ? '开仓' : '平仓',
   ])
   downloadCsv('成交记录.csv', header, records)
 }
@@ -582,7 +582,7 @@ function exportRowDate(target, row) {
   return row.submittedAt
 }
 function exportRowsFor(target, dateRange = []) {
-  const rows = target === 'positions' ? sortedRows.value : target === 'orders' ? orders.value : target === 'trades' ? sortedTrades.value : trsPoolExportRows.value
+  const rows = target === 'positions' ? sortedRows.value : target === 'orders' ? sortedOrders.value : target === 'trades' ? sortedTrades.value : trsPoolExportRows.value
   const [startDate, endDate] = dateRange
   if (!startDate || !endDate) return rows
   return rows.filter(row => {
@@ -600,7 +600,6 @@ function confirmExport(target, dateRange = []) {
 function refreshTable() { tableRefreshKey.value += 1 }
 function isCopyableIdentifier(column) { return copyableIdentifierFields.has(column?.property) }
 function identifierText(row, column) {
-  if (column?.property === 'code') return row?.code ? `${row.code}.${row.market}` : ''
   return String(row?.[column?.property] ?? '').trim()
 }
 async function copyIdentifier(row, column) {
@@ -805,44 +804,100 @@ function acceptAmendOrder(amendment) {
   if (!systemRunning.value) return
   const row = demoOrders.value.find(item => item.id === amendment.orderId)
   if (!row || !canOperateOrder(row)) return
-  const isLimit = row.type !== 'market'
+  const isLimit = amendment.type !== 'market'
   const nextPrice = isLimit ? amendment.price : null
   const delta = amendment.quantityDelta
   const referencePrice = nextPrice ?? amendingSymbol.value?.price ?? 0
   const amendedBaseQuantity = delta > 0 ? row.quantity : amendment.quantity
-  if (isLimit) row.price = nextPrice
+  if (row.filledQuantity > 0) {
+    // The filled portion is immutable; replace only the outstanding shares.
+    const outstanding = Math.max(0, row.quantity - row.filledQuantity)
+    const replacementQuantity = amendment.quantity - row.filledQuantity
+    const id = Date.now()
+    const replacementOrderNo = replacementQuantity > 0 ? `WT${id}` : null
+    row.canceledQuantity = (row.canceledQuantity || 0) + outstanding
+    row.canceledAmount = (row.canceledAmount || 0) + outstanding * (row.price ?? amendingSymbol.value?.price ?? 0)
+    row.reportQuantity = 0
+    row.frozenMargin = 0
+    row.status = '已撤'
+    row.feedback = replacementOrderNo
+      ? `未成交部分已撤，关联改单订单 ${replacementOrderNo}`
+      : '未成交部分已撤，已成交记录保持不变'
+    if (replacementOrderNo) {
+      const replacementAmount = amendment.inputAmount === null ? null : replacementQuantity * referencePrice
+      const replacementOrder = enrichOrder({
+        id: `amend-replacement-${id}`, orderNo: replacementOrderNo,
+        account: row.account, accountLabel: row.accountLabel, code: row.code, name: row.name, market: row.market,
+        executionType: amendment.executionType, orderType: amendment.executionType === 'highTouch' ? '手工单' : '系统单',
+        algorithm: amendment.algorithm, algorithmParams: amendment.algorithmParams, orderRemark: amendment.note, note: amendment.note,
+        type: amendment.type, side: amendment.side, openClose: row.openClose, status: '待报',
+        attribute: `${isLimit ? '限价' : '市价'}·${replacementAmount === null ? '数量' : '金额'}`,
+        quantity: replacementQuantity, price: nextPrice, inputAmount: replacementAmount,
+        orderValueNumber: replacementAmount ?? replacementQuantity,
+        orderValue: replacementAmount === null ? `${number(replacementQuantity)} 股` : `${money(replacementAmount)} CNY`,
+        filledQuantity: 0, filledPrice: null, estimate: referencePrice * replacementQuantity,
+        feedback: `关联原订单 ${row.orderNo} 的未成交部分`, parentOrderNo: row.orderNo,
+      })
+      demoOrders.value.unshift(replacementOrder)
+      publishOrderActivityMessage(replacementOrder)
+    }
+    publishOrderActivityMessage(row)
+    publishTransactionMessage({
+      name: row.name, code: row.code, status: '改单申请已提交', quantity: replacementQuantity,
+      quantityLabel: '未成交订单数量', price: nextPrice, priceLabel: '订单价格', title: '改单申请已提交',
+      content: replacementOrderNo
+        ? `${row.name}（${row.code}）已成交部分保持不变，未成交部分由订单 ${replacementOrderNo} 承接。`
+        : `${row.name}（${row.code}）未成交部分已撤，已成交部分保持不变。`,
+    })
+    tab.value = 'orders'
+    return
+  }
+  row.executionType = amendment.executionType
+  row.orderType = amendment.executionType === 'highTouch' ? '手工单' : '系统单'
+  row.side = amendment.side
+  row.type = amendment.type
+  row.price = nextPrice
+  row.algorithm = amendment.algorithm
+  row.algorithmParams = amendment.algorithmParams
+  row.orderRemark = amendment.note
+  row.note = amendment.note
+  row.attribute = `${isLimit ? '限价' : '市价'}·${amendment.inputAmount === null ? '数量' : '金额'}`
+  row.inputAmount = amendment.inputAmount === null ? null : delta > 0 ? amendedBaseQuantity * referencePrice : amendment.inputAmount
+  row.orderValueNumber = row.inputAmount ?? amendedBaseQuantity
+  row.orderValue = row.inputAmount === null ? `${number(amendedBaseQuantity)} 股` : `${money(row.inputAmount)} CNY`
   row.estimate = referencePrice * amendedBaseQuantity
   row.frozenMargin = row.estimate * .4
   row.status = '改单中'
   if (delta > 0) {
     const id = Date.now()
+    const chaseAmount = amendment.inputAmount === null ? null : delta * referencePrice
     demoOrders.value.unshift(enrichOrder({
       id: `amend-chase-${id}`, orderNo: `WT${id}`, account: row.account, code: row.code, name: row.name,
-      executionType: row.executionType, orderType: row.orderType, algorithm: row.algorithm, orderRemark: row.orderRemark, type: row.type, side: row.side, openClose: row.openClose,
-      status: '待报', attribute: `${row.type === 'market' ? '市价' : '限价'}·数量`, quantity: delta, price: nextPrice,
-      orderValueNumber: delta, orderValue: `${number(delta)} 股`, filledQuantity: 0, filledPrice: null,
+      executionType: row.executionType, orderType: row.orderType, algorithm: row.algorithm, algorithmParams: row.algorithmParams,
+      orderRemark: row.orderRemark, note: row.note, type: row.type, side: row.side, openClose: row.openClose,
+      status: '待报', attribute: row.attribute, quantity: delta, price: nextPrice, inputAmount: chaseAmount,
+      orderValueNumber: chaseAmount ?? delta, orderValue: chaseAmount === null ? `${number(delta)} 股` : `${money(chaseAmount)} CNY`,
+      filledQuantity: 0, filledPrice: null,
       estimate: referencePrice * delta, traderRemark: `关联原订单 ${row.orderNo} 的追单`, parentOrderNo: row.orderNo,
     }))
     row.feedback = `改单已受理：新增追单 ${number(delta)} 股`
   } else if (delta < 0) {
     const canceledQuantity = Math.abs(delta)
     row.quantity = amendment.quantity
-    row.orderValueNumber = amendment.quantity
-    row.orderValue = `${number(amendment.quantity)} 股`
     row.canceledQuantity = (row.canceledQuantity || 0) + canceledQuantity
     row.canceledAmount = (row.canceledAmount || 0) + canceledQuantity * (nextPrice ?? 0)
     row.reportQuantity = Math.max(0, amendment.quantity - (row.filledQuantity || 0))
     row.frozenMargin = row.estimate * .4
     row.feedback = `改单已受理：部撤 ${number(canceledQuantity)} 股`
   } else {
-    row.feedback = '改单已受理：已调整委托价格'
+    row.feedback = '改单已受理：订单参数已更新'
   }
   publishOrderActivityMessage(row)
   publishTransactionMessage({
     name: row.name, code: row.code, status: `${amendment.operation}申请已提交`, quantity: Math.abs(delta) || amendment.quantity,
     quantityLabel: amendment.operation === '追单' ? '追单数量' : amendment.operation === '部撤' ? '部撤数量' : '订单数量',
     price: nextPrice, priceLabel: '订单价格', title: '改单申请已提交',
-    content: `${row.name}（${row.code}）改单申请已提交：${amendment.operation}${delta ? ` ${number(Math.abs(delta))} 股` : '价格调整'}。`,
+    content: `${row.name}（${row.code}）改单申请已提交：${amendment.operation}${delta ? ` ${number(Math.abs(delta))} 股` : '订单参数调整'}。`,
   })
   tab.value = 'orders'
 }
