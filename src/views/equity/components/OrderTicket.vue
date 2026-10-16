@@ -36,6 +36,7 @@ const frameworkId = ref(props.initialOrder?.frameworkId || props.account.framewo
 const frameworkByAccount = ref({})
 const instrumentSelect = ref(null), instrumentPopperWidth = ref(0)
 const quantityInputKey = ref(0)
+const quantityInput = ref(null)
 const displaySymbolCode = ref(props.initialOrder?.symbolCode || props.symbol.code)
 const manualInstruments = ref([])
 const selectedManualInstrument = ref(null)
@@ -104,29 +105,37 @@ const hasInvalidPovParameters = (hours, minutes, participation) => !Number.isInt
 const povParameterError = computed(() => algorithm.value === 'POV' && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
 const draftPovParameterError = computed(() => draftAlgorithm.value === 'POV' && hasInvalidPovParameters(draftPovHours.value, draftPovMinutes.value, draftPovParticipation.value))
 const algorithmValid = computed(() => !povParameterError.value)
+const usesPercentage = computed(() => executionType.value === 'lowTouch' && quantityMode.value === 'percentage')
+const percentageUnitLabel = computed(() => sourceOrderSide.value === 'buy' ? '最大可买' : sourceOrderSide.value === 'sell' ? '最大可卖' : '最大可买/可卖')
 const usesAmount = computed(() => orderType.value === 'limit' && quantityMode.value === 'amount')
 const shares = computed(() => {
   if (!usesAmount.value) return (quantity.value || 0) * (unit.value === 'wan' ? 10000 : 1)
   const priceValue = Number(estimatedPrice.value)
   return priceValue > 0 && lotSize.value ? Math.floor((amount.value || 0) / priceValue / lotSize.value) * lotSize.value : 0
 })
-const lotInvalid = computed(() => !usesAmount.value && unit.value === 'shares' && lotSize.value && quantity.value > 0 && quantity.value % lotSize.value !== 0)
+const lotInvalid = computed(() => !usesPercentage.value && !usesAmount.value && unit.value === 'shares' && lotSize.value && quantity.value > 0 && quantity.value % lotSize.value !== 0)
 const isLargeAmount = computed(() => usesAmount.value && (amount.value || 0) > globalTradingConfig.largeOrderAmountCny)
 const maxBuy = computed(() => selectedManualInstrument.value ? Number.MAX_SAFE_INTEGER : (estimatedPrice.value > 0 && lotSize.value ? Math.floor(props.account.cash / estimatedPrice.value / lotSize.value) * lotSize.value : 0))
 const maxSell = computed(() => selectedManualInstrument.value ? Number.MAX_SAFE_INTEGER : Math.max(0, props.symbol.available))
-const commonValid = computed(() => {
-  const validQuantity = isCustomManualInstrument.value ? Number.isInteger(shares.value) : shares.value % (lotSize.value || 100) === 0
-  return !!displaySymbolCode.value && shares.value > 0 && validQuantity && algorithmValid.value && counterpartyValid.value && (orderType.value === 'market' || price.value > 0)
-})
-const canBuy = computed(() => !props.paused && commonValid.value)
-const canSell = computed(() => !props.paused && commonValid.value)
+function percentageShares(maximum) {
+  const lot = lotSize.value || 100
+  return Math.floor(maximum * fraction.value / 100 / lot) * lot
+}
+const buyShares = computed(() => usesPercentage.value ? percentageShares(maxBuy.value) : shares.value)
+const sellShares = computed(() => usesPercentage.value ? percentageShares(maxSell.value) : shares.value)
+const commonValid = computed(() => !!displaySymbolCode.value && algorithmValid.value && counterpartyValid.value && (orderType.value === 'market' || price.value > 0))
+function validQuantity(value) {
+  return value > 0 && (isCustomManualInstrument.value ? Number.isInteger(value) : value % (lotSize.value || 100) === 0)
+}
+const canBuy = computed(() => !props.paused && commonValid.value && validQuantity(buyShares.value))
+const canSell = computed(() => !props.paused && commonValid.value && validQuantity(sellShares.value))
 const confirmationTitle = computed(() => {
   if (!snapshot.value) return '确认订单'
   const action = snapshot.value.side === 'buy' ? '买入' : '卖出'
   const value = `${number(snapshot.value.quantity)} 股`
   return `确认${action} ${value}吗？`
 })
-function reset() { quantity.value = undefined; amount.value = undefined; fraction.value = 0; quantityLimitError.value = ''; confirming.value = false }
+function reset() { if (quantityMode.value === 'percentage') quantityMode.value = 'quantity'; quantity.value = undefined; amount.value = undefined; fraction.value = 0; quantityLimitError.value = ''; confirming.value = false }
 function resetOrder() { reset(); note.value = '' }
 function rememberRecent(code) {
   const scope = executionType.value
@@ -151,7 +160,7 @@ function removeRecentSymbol(code) {
   const scope = executionType.value
   recentCodesByExecution.value = { ...recentCodesByExecution.value, [scope]: (recentCodesByExecution.value[scope] || []).filter(item => item !== code) }
 }
-function clearInstrument() { displaySymbolCode.value = null; selectedManualInstrument.value = null; emit('select', null); search.value = ''; price.value = null; note.value = ''; fraction.value = 0; confirming.value = false; nextTick(() => { quantity.value = undefined; amount.value = undefined; quantityInputKey.value += 1 }) }
+function clearInstrument() { displaySymbolCode.value = null; selectedManualInstrument.value = null; emit('select', null); search.value = ''; price.value = null; note.value = ''; reset(); confirming.value = false; nextTick(() => { quantity.value = undefined; amount.value = undefined; quantityInputKey.value += 1 }) }
 function handleInstrumentVisible(visible) { if (visible) { search.value = ''; nextTick(() => { instrumentPopperWidth.value = Math.round(instrumentSelect.value?.$el?.getBoundingClientRect().width || 0) }) } }
 function openManualInstrument() { if (!isManualOrder.value) return; manualInstrumentName.value = search.value.trim(); manualInstrumentCode.value = ''; manualInstrumentMarket.value = 'A'; manualInstrumentError.value = ''; manualInstrumentVisible.value = true }
 function saveManualInstrument() {
@@ -236,28 +245,47 @@ watch(() => props.initialOrder, value => {
 }, { deep: true })
 watch(() => props.account.id, () => { if (props.customerOrderReadonly) return; applyAccountFramework(props.account); resetOrder() })
 watch(orderType, type => { if (type === 'market') quantityMode.value = 'quantity' }, { immediate: true })
-watch([orderType, unit, quantityMode], () => { if (!props.customerOrderReadonly && !applyingInitialOrder) reset() })
+watch([orderType, unit], () => { if (!props.customerOrderReadonly && !applyingInitialOrder) reset() })
+watch(quantityMode, mode => { if (mode !== 'percentage' && !props.customerOrderReadonly && !applyingInitialOrder) reset() })
 watch(executionType, () => { if (props.customerOrderReadonly) return; selectedManualInstrument.value = null; displaySymbolCode.value = props.symbol.code; search.value = ''; price.value = props.symbol.price; resetOrder() })
 watch(() => props.quote, value => { if (!props.customerOrderReadonly && value && !selectedManualInstrument.value) { orderType.value = 'limit'; price.value = value.price } })
-watch(price, () => { if (!props.closeMode) fraction.value = 0; confirming.value = false })
+watch(price, () => { if (!props.closeMode && !usesPercentage.value) fraction.value = 0; confirming.value = false })
 watch([quantity, amount, quantityMode, unit, amountUnit], () => { quantityLimitError.value = '' })
 watch([shares, maxSell], ([value, maximum]) => {
-  if (props.closeMode) fraction.value = maximum > 0 ? Math.min(100, Math.max(0, value / maximum * 100)) : 0
+  if (props.closeMode && !usesPercentage.value) fraction.value = maximum > 0 ? Math.min(100, Math.max(0, value / maximum * 100)) : 0
 }, { immediate: true })
-function size(value) { if (props.customerOrderReadonly) return; const q = Math.floor((props.closeMode ? maxSell.value : maxBuy.value) * value / 100 / (lotSize.value || 100)) * (lotSize.value || 100); if (usesAmount.value) amount.value = Number((q * estimatedPrice.value).toFixed(2)); else quantity.value = unit.value === 'wan' ? Math.floor(q / 10000) : q }
+function size(value) {
+  if (props.customerOrderReadonly) return
+  quantityMode.value = 'percentage'
+  fraction.value = value
+  quantityLimitError.value = ''
+  confirming.value = false
+}
+async function focusManualQuantity() {
+  if (!usesPercentage.value || props.customerOrderReadonly) return
+  quantityMode.value = 'quantity'
+  unit.value = 'shares'
+  // Let the mode/unit watchers clear the previous values before initializing zero.
+  await nextTick()
+  quantity.value = 0
+  fraction.value = 0
+  await nextTick()
+  quantityInput.value?.focus()
+}
 function stepPrice(direction) { if (props.customerOrderReadonly) return; const current = Number(price.value) || 0; price.value = Number((Math.max(0, current + direction * .01)).toFixed(2)) }
 function preview(side) {
   if (props.paused) return
   if (sourceOrderSide.value && side !== sourceOrderSide.value) return
   if (!(side === 'buy' ? canBuy.value : canSell.value)) return
+  const orderQuantity = side === 'buy' ? buyShares.value : sellShares.value
   const maximum = side === 'buy' ? maxBuy.value : maxSell.value
-  if (!props.initialOrder?.skipQuantityLimit && !isCustomManualInstrument.value && shares.value > maximum) {
+  if (!props.initialOrder?.skipQuantityLimit && !isCustomManualInstrument.value && orderQuantity > maximum) {
     quantityLimitError.value = `当前订单数量超出最大可${side === 'buy' ? '买' : '卖'}，请重新输入。`
     return
   }
-  if (!isCustomManualInstrument.value && side === 'buy' && estimatedPrice.value * shares.value > props.account.cash) { insufficientFunds.value = true; return }
+  if (!isCustomManualInstrument.value && side === 'buy' && estimatedPrice.value * orderQuantity > props.account.cash) { insufficientFunds.value = true; return }
   const id = Date.now()
-  snapshot.value = { id, orderNo: `WT${id}`, account: sourceAccountValue.value, accountLabel: sourceAccountLabel.value, ...(props.showFramework && sourceFrameworkName.value ? { frameworkId: frameworkId.value, framework: sourceFrameworkName.value } : {}), ...(props.counterparties.length ? { counterparty: selectedCounterparty.value, executionChannel: selectedCounterparty.value ? 'counterparty' : 'offline' } : {}), ...(algorithm.value === 'POV' ? { algorithmParams: { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value) } } : {}), code: ticketSymbol.value.code, name: ticketSymbol.value.name, executionType: executionType.value, algorithm: algorithm.value, note: note.value.trim(), type: orderType.value, side, quantity: shares.value, inputAmount: usesAmount.value ? amount.value : null, price: orderType.value === 'limit' ? price.value : null, estimate: estimatedPrice.value * shares.value, status: '待报', runStatus: '正常', openClose: props.initialOrder?.openClose || (props.closeMode ? '平' : '开'), attribute: `${orderType.value === 'limit' ? '限价' : '市价'}·${usesAmount.value ? '金额' : '数量'}`, orderValueNumber: usesAmount.value ? amount.value : shares.value, orderValue: usesAmount.value ? `${money(amount.value || 0)} CNY` : `${number(shares.value)} 股`, filledQuantity: 0, filledPrice: null }
+  snapshot.value = { id, orderNo: `WT${id}`, account: sourceAccountValue.value, accountLabel: sourceAccountLabel.value, ...(props.showFramework && sourceFrameworkName.value ? { frameworkId: frameworkId.value, framework: sourceFrameworkName.value } : {}), ...(props.counterparties.length ? { counterparty: selectedCounterparty.value, executionChannel: selectedCounterparty.value ? 'counterparty' : 'offline' } : {}), ...(algorithm.value === 'POV' ? { algorithmParams: { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value) } } : {}), code: ticketSymbol.value.code, name: ticketSymbol.value.name, executionType: executionType.value, algorithm: algorithm.value, note: note.value.trim(), type: orderType.value, side, quantity: orderQuantity, inputAmount: usesAmount.value ? amount.value : null, price: orderType.value === 'limit' ? price.value : null, estimate: estimatedPrice.value * orderQuantity, status: '待报', runStatus: '正常', openClose: props.initialOrder?.openClose || (props.closeMode ? '平' : '开'), attribute: `${orderType.value === 'limit' ? '限价' : '市价'}·${usesAmount.value ? '金额' : '数量'}`, orderValueNumber: usesAmount.value ? amount.value : orderQuantity, orderValue: usesAmount.value ? `${money(amount.value || 0)} CNY` : `${number(orderQuantity)} 股`, filledQuantity: 0, filledPrice: null }
   confirming.value = true
 }
 function submit() { if (props.paused) { confirming.value = false; return }; emit('order', { ...snapshot.value }); ElMessage.success('操作成功。'); resetOrder() }
@@ -298,17 +326,28 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
       <template v-else><div class="field-caption"><span>订单价格</span><el-radio-group v-model="orderType" class="quantity-mode order-price-type" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="limit">限价</el-radio-button><el-radio-button label="market">市价</el-radio-button></el-radio-group></div><div class="market-price-note"><b>以市场价格成交</b></div></template>
     </section>
     <section class="quantity-block">
-      <div class="field-caption"><label :for="usesAmount ? 'variant-amount' : 'variant-quantity'">{{ usesAmount ? '订单金额' : '订单数量' }}</label><div class="quantity-caption-actions"><span v-if="!usesAmount && lotSizeLabel" class="order-lot-tag">{{ lotSizeLabel }}</span><el-radio-group v-model="quantityMode" class="quantity-mode" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="quantity">数量</el-radio-button><el-radio-button v-if="orderType === 'limit'" label="amount">金额</el-radio-button></el-radio-group></div></div>
-      <template v-if="!usesAmount"><div class="quantity-input-row" :class="{ 'is-error': lotInvalid || quantityLimitError }"><el-input-number :key="quantityInputKey" id="variant-quantity" v-model="quantity" placeholder="请输入" :disabled="customerOrderReadonly" :min="isCustomManualInstrument ? 1 : undefined" :step="unit === 'wan' ? 1 : (isCustomManualInstrument ? 1 : (lotSize || 100))" :precision="0" :controls="false" /><el-select v-model="unit" :disabled="customerOrderReadonly" aria-label="数量单位" popper-class="variant-popper quantity-unit-popper" placement="bottom-end" :offset="4" :class="{ 'is-wan-unit': unit === 'wan' }"><el-option label="股" value="shares" /><el-option label="万股" value="wan" /></el-select></div><span v-if="lotInvalid || quantityLimitError" class="lot-error" role="alert">{{ lotInvalid ? '订单数量须为整手，请重新输入' : quantityLimitError }}</span></template>
+      <div class="field-caption"><label :for="usesPercentage ? 'variant-percentage' : usesAmount ? 'variant-amount' : 'variant-quantity'">{{ usesAmount ? '订单金额' : '订单数量' }}</label><div class="quantity-caption-actions"><span v-if="!usesAmount && lotSizeLabel" class="order-lot-tag">{{ lotSizeLabel }}</span><el-radio-group v-model="quantityMode" class="quantity-mode" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="quantity">数量</el-radio-button><el-radio-button v-if="orderType === 'limit'" label="amount">金额</el-radio-button></el-radio-group></div></div>
+      <div v-if="usesPercentage" class="quantity-input-row percentage-input-row">
+        <el-input id="variant-percentage" :model-value="`${fraction}%`" readonly aria-label="订单数量百分比" title="拖动滑块调整比例，聚焦后恢复为 0 股并手动输入" @focus="focusManualQuantity" />
+        <span class="percentage-unit">{{ percentageUnitLabel }}</span>
+      </div>
+      <template v-else-if="!usesAmount"><div class="quantity-input-row" :class="{ 'is-error': lotInvalid || quantityLimitError }"><el-input-number ref="quantityInput" :key="quantityInputKey" id="variant-quantity" v-model="quantity" placeholder="请输入" :disabled="customerOrderReadonly" :min="isCustomManualInstrument ? 1 : undefined" :step="unit === 'wan' ? 1 : (isCustomManualInstrument ? 1 : (lotSize || 100))" :precision="0" :controls="false" /><el-select v-model="unit" :disabled="customerOrderReadonly" aria-label="数量单位" popper-class="variant-popper quantity-unit-popper" placement="bottom-end" :offset="4" :class="{ 'is-wan-unit': unit === 'wan' }"><el-option label="股" value="shares" /><el-option label="万股" value="wan" /></el-select></div><span v-if="lotInvalid || quantityLimitError" class="lot-error" role="alert">{{ lotInvalid ? '订单数量须为整手，请重新输入' : quantityLimitError }}</span></template>
       <div v-else class="quantity-input-row amount-input-row" :class="{ 'is-error': quantityLimitError, 'is-large-amount': isLargeAmount }"><el-input-number :key="quantityInputKey" id="variant-amount" v-model="displayedAmount" placeholder="请输入" :disabled="customerOrderReadonly" :step="amountUnit === 'wan' ? 1 : 1000" :precision="2" :controls="false" /><el-select v-model="amountUnit" :disabled="customerOrderReadonly" aria-label="金额单位" popper-class="variant-popper quantity-unit-popper" placement="bottom-end" :offset="4" :class="{ 'is-wan-unit': amountUnit === 'wan' }"><el-option label="元" value="yuan" /><el-option label="万元" value="wan" /></el-select></div><span v-if="usesAmount && quantityLimitError" class="lot-error" role="alert">{{ quantityLimitError }}</span>
       <section class="order-account-block order-algorithm-block"><div class="field-caption"><span>算法</span></div><el-popover v-model:visible="algorithmPopoverVisible" trigger="click" :disabled="customerOrderReadonly" placement="bottom-end" :width="264" popper-class="variant-popper algorithm-popper" @show="openAlgorithmConfig"><template #reference><button type="button" class="algorithm-trigger" :disabled="customerOrderReadonly" :aria-label="customerOrderReadonly ? `执行算法：${algorithmDisplay(algorithm)}` : `执行算法：${algorithmDisplay(algorithm)}，点击配置`"><span>{{ algorithmDisplay(algorithm) }}</span><svg v-if="!customerOrderReadonly" class="algorithm-chevron" :class="{ 'is-open': algorithmPopoverVisible }" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg></button></template><div class="execution-algorithm-menu"><span>执行算法</span><el-radio-group v-model="draftAlgorithm" aria-label="执行算法"><el-radio-button label="POV">POV</el-radio-button><el-radio-button label="DMA">DMA</el-radio-button><el-radio-button label="none">无需算法</el-radio-button></el-radio-group><div v-if="draftAlgorithm === 'POV'" class="algorithm-popper-params" aria-label="POV 参数"><div class="algorithm-param-row"><span>运行时间</span><div class="algorithm-param-input"><el-select v-model="draftPovHours" class="algorithm-time-select" aria-label="POV运行小时" popper-class="variant-popper" :teleported="false"><el-option v-for="hour in povHourOptions" :key="hour" :label="String(hour).padStart(2, '0')" :value="hour" /></el-select><i>时</i><el-select v-model="draftPovMinutes" class="algorithm-time-select" aria-label="POV运行分钟" popper-class="variant-popper" :teleported="false"><el-option v-for="minute in povMinuteOptions" :key="minute" :label="String(minute).padStart(2, '0')" :value="minute" /></el-select><i>分</i></div></div><div class="algorithm-param-row"><span>市场成交占比</span><div class="algorithm-param-input is-participation"><el-input-number v-model="draftPovParticipation" :min="1" :max="25" :precision="0" :controls="false" aria-label="POV市场成交占比" /><i>%</i><small>不超过 25%</small></div></div><p v-if="draftPovParameterError" class="algorithm-param-error" role="alert">请填写有效的运行时间，市场成交占比不得超过 25%</p></div><footer class="algorithm-menu-actions"><el-button size="small" @click="cancelAlgorithmConfig">取消</el-button><el-button size="small" type="primary" :disabled="draftPovParameterError" @click="confirmAlgorithmConfig">确认</el-button></footer></div></el-popover></section>
       <el-slider v-if="executionType === 'lowTouch'" v-model="fraction" :disabled="customerOrderReadonly" :step="1" :marks="{0:'0%',25:'25%',50:'50%',75:'75%',100:'100%'}" @input="size" />
       <div v-if="executionType === 'lowTouch'" class="capacity-pair" :class="{ 'is-single': lockedContext && sourceOrderSide }"><div v-if="!lockedContext || sourceOrderSide !== 'sell'">最大可买<b>{{ number(maxBuy) }} 股</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'"><div class="total-heading"><span>最大可卖</span><el-tooltip content="最大可卖(名本) = 持仓均价*卖出股数（卖出股数暂不支持碎股，不满足1手按照1手处理，向下取整）" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="最大可卖说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></div><b>{{ number(maxSell) }} 股</b></div></div>
     </section>
     <section v-if="executionType === 'highTouch' || customerOrderReadonly" class="order-note-block"><div class="field-caption"><label for="manual-order-note">备注</label></div><el-input id="manual-order-note" v-model="note" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入备注" /></section>
-    <section class="submit-block"><div class="trade-buttons"><el-button v-if="!sourceOrderSide || sourceOrderSide === 'buy'" class="buy-action" :disabled="!canBuy" @click="preview('buy')">买入</el-button><el-button v-if="!sourceOrderSide || sourceOrderSide === 'sell'" class="sell-action" :disabled="!canSell" @click="preview('sell')">卖出</el-button></div><template v-if="executionType === 'lowTouch'"><div class="order-totals"><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入预估(股)</span><b>{{ shares ? number(shares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>卖出预估(股)</span></div><b>{{ shares ? number(shares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入金额(CNY)</span><b>{{ shares ? money(shares * (estimatedPrice || 0)) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>预估卖出金额(CNY)</span></div><b>{{ shares ? money(shares * (estimatedPrice || 0)) : '--' }}</b></div></div></template></section>
+    <section class="submit-block"><div class="trade-buttons"><el-button v-if="!sourceOrderSide || sourceOrderSide === 'buy'" class="buy-action" :disabled="!canBuy" @click="preview('buy')">买入</el-button><el-button v-if="!sourceOrderSide || sourceOrderSide === 'sell'" class="sell-action" :disabled="!canSell" @click="preview('sell')">卖出</el-button></div><template v-if="executionType === 'lowTouch'"><div class="order-totals"><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入预估(股)</span><b>{{ buyShares ? number(buyShares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>卖出预估(股)</span></div><b>{{ sellShares ? number(sellShares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入金额(CNY)</span><b>{{ buyShares ? money(buyShares * (estimatedPrice || 0)) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>预估卖出金额(CNY)</span></div><b>{{ sellShares ? money(sellShares * (estimatedPrice || 0)) : '--' }}</b></div></div></template></section>
   </div>
   <BaseDialog v-model="confirming" :title="confirmationTitle" width="460px" align-center append-to-body class="variant-confirm order-confirm" :close-on-press-escape="false"><template v-if="snapshot"><div class="confirm-identity" :class="snapshot.side"><span>{{ snapshot.side === 'buy' ? '买入' : '卖出' }}</span><strong>{{ snapshot.name }}</strong><small>{{ snapshot.code }}</small></div><div class="confirm-key-metrics"><div><span>订单价格(CNY)</span><b>{{ snapshot.type === 'limit' ? money(snapshot.price) : '市价' }}</b></div><div><span>订单数量(股)</span><b>{{ number(snapshot.quantity) }}</b></div><div><span>预估金额(CNY)</span><b>{{ money(snapshot.estimate) }}</b></div></div><dl class="confirm-details"><dt>下单账户</dt><dd>{{ snapshot.accountLabel || snapshot.account }}</dd><template v-if="snapshot.framework"><dt>客户框架</dt><dd>{{ snapshot.framework }}</dd></template><template v-if="snapshot.executionChannel"><dt>上手方</dt><dd>{{ snapshot.counterparty || '线下单' }}</dd></template><template v-if="snapshot.algorithmParams"><dt>运行时间</dt><dd>{{ snapshot.algorithmParams.hours }} 时 {{ snapshot.algorithmParams.minutes }} 分</dd><dt>市场成交占比</dt><dd>{{ snapshot.algorithmParams.participation }}%</dd></template><template v-if="snapshot.inputAmount !== null"><dt>订单金额</dt><dd>{{ money(snapshot.inputAmount) }} CNY</dd></template><dt>订单类型</dt><dd><span class="order-confirm-tag">{{ snapshot.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></dd><dt>执行算法</dt><dd><span class="order-confirm-tag">{{ algorithmDisplay(snapshot.algorithm) }}</span></dd><dt>订单方式</dt><dd><span class="order-confirm-tag">{{ snapshot.type === 'limit' ? '限价单' : '市价单' }}</span></dd><template v-if="snapshot.note"><dt>备注</dt><dd>{{ snapshot.note }}</dd></template></dl></template><template #footer><el-button @click="confirming = false">返回</el-button><el-button type="primary" @click="submit">确认{{ snapshot?.side === 'buy' ? '买入' : '卖出' }}</el-button></template></BaseDialog>
   <BaseDialog v-model="manualInstrumentVisible" title="手动新增标的" width="400px" align-center append-to-body class="variant-confirm manual-instrument-dialog" :close-on-press-escape="false"><p class="manual-instrument-notice">您正在添加非标准标的，请确认标的名称、代码和市场。</p><div class="manual-instrument-form"><label>标的名称<el-input v-model="manualInstrumentName" placeholder="请输入标的名称" /></label><label>标的代码<el-input v-model="manualInstrumentCode" placeholder="请输入标的代码" /></label><label>所属市场<el-select v-model="manualInstrumentMarket" aria-label="所属市场" popper-class="variant-popper"><el-option v-for="item in manualInstrumentMarketOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></label><p v-if="manualInstrumentError" class="manual-instrument-error" role="alert">{{ manualInstrumentError }}</p></div><template #footer><el-button @click="manualInstrumentVisible = false">取消[Esc]</el-button><el-button type="primary" @click="saveManualInstrument">新增标的[Enter]</el-button></template></BaseDialog>
-  <BaseDialog v-model="insufficientFunds" title="可用余额不足" width="380px" align-center append-to-body class="variant-confirm insufficient-funds"><div class="balance-compare"><div><span>本次买入预计需</span><b>{{ money(shares * (estimatedPrice || 0)) }}</b><small>CNY</small></div><div><span>账户可用余额</span><b>{{ money(account.cash) }}</b><small>CNY</small></div></div><p class="dim">请降低订单数量或订单价格后重试。</p><template #footer><el-button type="primary" @click="insufficientFunds = false">我知道了</el-button></template></BaseDialog>
+  <BaseDialog v-model="insufficientFunds" title="可用余额不足" width="380px" align-center append-to-body class="variant-confirm insufficient-funds"><div class="balance-compare"><div><span>本次买入预计需</span><b>{{ money(buyShares * (estimatedPrice || 0)) }}</b><small>CNY</small></div><div><span>账户可用余额</span><b>{{ money(account.cash) }}</b><small>CNY</small></div></div><p class="dim">请降低订单数量或订单价格后重试。</p><template #footer><el-button type="primary" @click="insufficientFunds = false">我知道了</el-button></template></BaseDialog>
 </template>
+
+<style scoped>
+.percentage-input-row > .el-input{flex:1;min-width:0}
+.percentage-input-row :deep(.el-input__wrapper){border-radius:3px 0 0 3px}
+.percentage-input-row :deep(.el-input__inner){font-size:17px;font-weight:500}
+.percentage-unit{display:flex;align-items:center;flex-shrink:0;box-sizing:border-box;height:40px;padding:0 10px;border:1px solid #3b3f46;border-left:0;border-radius:0 3px 3px 0;background:#25282d;color:#c2c6ce;font-size:14px;white-space:nowrap}
+</style>
