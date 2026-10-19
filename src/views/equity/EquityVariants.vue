@@ -199,9 +199,9 @@ const appliedTradeFilters = ref({ symbol: '', side: 'ALL', openClose: 'ALL', ord
 const sortState = ref({ prop: null, direction: null })
 const orderSortState = ref({ prop: null, direction: null })
 const tradeSortState = ref({ prop: null, direction: null })
-const positionColumnDefaults = columnOptionsFor('positions').map(([id]) => id).filter(id => !['orderRemark', 'traderRemark'].includes(id))
+const columnOptions = columnOptionsFor('positions').filter(([id]) => !['totalProfit', 'dailyRealizedProfit'].includes(id))
+const positionColumnDefaults = columnOptions.map(([id]) => id).filter(id => !['orderRemark', 'traderRemark'].includes(id))
 const visibleColumnKeys = ref([...positionColumnDefaults])
-const columnOptions = columnOptionsFor('positions')
 const orderColumnDefaults = columnOptionsFor('orders').map(([id]) => id)
 const orderVisibleColumnKeys = ref([...orderColumnDefaults])
 const orderColumnOptions = columnOptionsFor('orders')
@@ -228,7 +228,17 @@ const filteredGlobalAccounts = computed(() => {
   const keyword = globalAccountSearch.value.trim().toLowerCase()
   return keyword ? accounts.filter(item => accountLabel(item.id).toLowerCase().includes(keyword)) : accounts
 })
-const instruments = computed(() => variantRows.map(p => accountId.value === 'TZS_T0' ? p : { ...p, id: p.id.replace('T0','T1'), qty: p.qty*2, available: p.available*2, value: p.value*2, account:'TZS_T1' }))
+function secondAccountPosition(position) {
+  return {
+    ...position, id: position.id.replace('T0', 'T1'), account: 'TZS_T1',
+    opening: position.opening * 2, qty: position.qty * 2, available: position.available * 2,
+    pendingSell: (position.pendingSell || 0) * 2,
+    todayExecutions: position.todayExecutions?.map(execution => ({ ...execution, quantity: execution.quantity * 2 })),
+    value: position.value * 2, valueWan: position.valueWan * 2, marginOccupied: position.marginOccupied * 2,
+    floatingProfit: position.floatingProfit * 2, dailyRealizedProfit: position.dailyRealizedProfit * 2, totalProfit: position.totalProfit * 2,
+  }
+}
+const instruments = computed(() => variantRows.map(p => accountId.value === 'TZS_T0' ? p : secondAccountPosition(p)))
 const emptySelected = { code: '', market: '', name: '请选择下单标的', price: null, cost: null, change: 0, available: 0 }
 const selected = computed(() => instruments.value.find(p => p.code === selectedCode.value) || marketInstruments.find(p => p.code === selectedCode.value) || emptySelected)
 const trsTicketSymbol = computed(() => trsOrderRequest.value?.symbol || selected.value)
@@ -237,7 +247,7 @@ const trsTicketInstruments = computed(() => {
   return requestSymbol && !marketInstruments.some(item => item.code === requestSymbol.code) ? [requestSymbol, ...marketInstruments] : marketInstruments
 })
 const allPositionRows = computed(() => {
-  const baseRows = [...variantRows, ...variantRows.map(p => ({ ...p, id: p.id.replace('T0', 'T1'), qty: p.qty * 2, available: p.available * 2, value: p.value * 2, account: 'TZS_T1' }))]
+  const baseRows = [...variantRows, ...variantRows.map(secondAccountPosition)]
   const syncedKeys = new Set(syncedHtPositions.value.map(row => `${row.account}:${row.code}`))
   return [...syncedHtPositions.value, ...baseRows.filter(row => !syncedKeys.has(`${row.account}:${row.code}`))]
 })
@@ -245,8 +255,8 @@ const allRows = computed(() => allPositionRows.value.filter(row => effectiveAcco
 const mockCnyExchangeRates = Object.freeze({ CNY: 1, HKD: 0.92, USD: 7.18 })
 const mockRealtimeAvailableByAccount = Object.freeze({ TZS_T0: 1245527941.41, TZS_T1: 620800 })
 const cnyExchangeRate = currency => mockCnyExchangeRates[currency] ?? 1
-const portfolioMarketValue = computed(() => allRows.value.reduce((total, row) => total + (Number(row.price) || 0) * (Number(row.qty) || 0) * cnyExchangeRate(row.currency), 0))
-const portfolioFloatingPnl = computed(() => allRows.value.reduce((total, row) => total + ((Number(row.price) || 0) - (Number(row.cost) || 0)) * (Number(row.qty) || 0) * cnyExchangeRate(row.currency), 0))
+const portfolioMarketValue = computed(() => allRows.value.reduce((total, row) => total + (Number(row.value) || 0) * cnyExchangeRate(row.currency), 0))
+const portfolioFloatingPnl = computed(() => allRows.value.reduce((total, row) => total + (Number(row.floatingProfit) || 0) * cnyExchangeRate(row.currency), 0))
 const realtimeAvailable = computed(() => effectiveAccountIds.value.reduce((total, id) => total + (mockRealtimeAvailableByAccount[id] ?? accounts.find(account => account.id === id)?.cash ?? 0), 0))
 const floatingPnlClass = computed(() => portfolioFloatingPnl.value > 0 ? 'is-positive' : portfolioFloatingPnl.value < 0 ? 'is-negative' : '')
 const filtered = computed(() => allRows.value.filter(p => (!appliedPositionFilters.value.query || `${p.code}${p.name}`.includes(appliedPositionFilters.value.query.trim())) && (appliedPositionFilters.value.market === 'ALL' || p.market === appliedPositionFilters.value.market) && (appliedPositionFilters.value.positionType === 'ALL' || p.direction === appliedPositionFilters.value.positionType)))
@@ -542,8 +552,8 @@ function downloadCsv(filename, header, records) {
   URL.revokeObjectURL(link.href)
 }
 function exportPositions(rows = sortedRows.value) {
-  const header = ['多空方向', '证券代码', '证券名称', '持仓均价', '最新价', '期初数量', '持仓数量', '可用数量', '市值', '占用保证金', '保证金率', '总盈亏', '实现盈亏', '浮动盈亏', '下单账户', '市场', '币种', '订单类型', '执行算法', '下单备注', '交易员备注']
-  const records = rows.map(row => [row.direction, `${row.code}.${row.market}`, row.name, formatPrice(row.cost, row.market), formatPrice(row.price, row.market), number(row.opening), number(row.qty), number(row.available), money(row.value), money(row.marginOccupied), `${row.marginRate}%`, money(row.totalProfit), money(row.dailyRealizedProfit), money(row.floatingProfit), accountLabel(row.account), marketLabel(row.market), row.currency, row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', row.traderRemark || '--'])
+  const header = ['多空方向', '证券代码', '证券名称', '持仓均价', '最新价', '期初数量', '持仓数量', '可用数量', '市值', '占用保证金', '保证金率', '浮动盈亏', '下单账户', '市场', '币种', '订单类型', '执行算法', '下单备注', '交易员备注']
+  const records = rows.map(row => [row.direction, `${row.code}.${row.market}`, row.name, formatPrice(row.cost, row.market), formatPrice(row.price, row.market), number(row.opening), number(row.qty), number(row.available), money(row.value), money(row.marginOccupied), `${row.marginRate}%`, money(row.floatingProfit), accountLabel(row.account), marketLabel(row.market), row.currency, row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', row.traderRemark || '--'])
   downloadCsv('持仓列表.csv', header, records)
 }
 function exportOrders(rows = orders.value) {
@@ -701,7 +711,7 @@ function recordHtDealInEquity({ order, deal, quantity }) {
   const id = `ht-deal-${order.id}`
   const position = {
     id, code, name: order.underlying, market: suffix === 'SH' ? 'SH' : 'SZ', price: customerPrice, cost: customerPrice, change: 0,
-    qty: filledQuantity, available: filledQuantity, direction: order.direction === '卖出' ? '空' : '多', currency: 'CNY', executionType: 'highTouch',
+    qty: filledQuantity, available: order.direction === '卖出' ? filledQuantity : 0, direction: order.direction === '卖出' ? '空' : '多', currency: 'CNY', executionType: 'highTouch',
     orderType: '手工单', algorithm: 'DMA', orderRemark: `来源 HT 订单：${order.orderNo}`, traderRemark: '已同步成交结果', opening: 0,
     value, valueWan: value / 10000, marginOccupied: value * 0.1, marginRate: 10, floatingProfit: 0, dailyRealizedProfit: 0, totalProfit: 0,
     positionDate: timestampNow().slice(0, 10), account, lotSize: 100,

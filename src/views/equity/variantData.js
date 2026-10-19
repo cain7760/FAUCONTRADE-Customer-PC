@@ -10,15 +10,49 @@ export const price = (n, market) => {
   const digits = market === 'HK' ? 3 : 2
   return truncate(n, digits).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
+const cents = value => Math.round(Number(value) * 100)
+// 演示持仓按日初批次和当日成交计算；真实接口接入时仍以服务端持仓快照为准。
+export function calculatePositionMetrics(position, isAStock = false) {
+  const openingLots = position.openingLots || [{ quantity: position.opening, price: position.cost }]
+  const opening = openingLots.reduce((total, lot) => total + lot.quantity, 0)
+  const lots = openingLots.map(lot => ({ ...lot }))
+  let qty = opening
+  let todayBuys = 0
+  let realizedCents = 0
+  for (const execution of position.todayExecutions || []) {
+    if (execution.side === 'buy') {
+      lots.push({ quantity: execution.quantity, price: execution.price })
+      qty += execution.quantity
+      todayBuys += execution.quantity
+      continue
+    }
+    let remaining = execution.quantity
+    for (const lot of lots) {
+      const matched = Math.min(lot.quantity, remaining)
+      realizedCents += (cents(execution.price) - cents(lot.price)) * matched
+      lot.quantity -= matched
+      remaining -= matched
+      if (!remaining) break
+    }
+    if (remaining) throw new RangeError(`演示持仓 ${position.code || ''} 的卖出数量超过 FIFO 持仓`)
+    qty -= execution.quantity
+  }
+  return {
+    opening,
+    qty,
+    available: qty - (position.pendingSell || 0) - (isAStock ? todayBuys : 0),
+    dailyRealizedProfit: realizedCents / 100,
+  }
+}
 export const variantRows = positions.map((p, i) => {
-  const value = p.qty * p.price
-  const floatingProfit = (p.price - p.cost) * p.qty
+  const metrics = calculatePositionMetrics(p, true) // 当前演示持仓均为 A 股多头。
+  const value = cents(p.price) * metrics.qty / 100
+  const floatingProfit = (cents(p.price) - cents(p.cost)) * metrics.qty / 100
   const marginRate = 10
   const executionType = i % 4 === 3 ? 'highTouch' : 'lowTouch'
-  // 演示字段：真实口径应由持仓接口提供，避免把展示计算当作交易规则。
-  const dailyRealizedProfit = [0, -360, 180, 0, 520, 0, -240, 160, 0, -120, 80, 0][i]
   return {
     ...p,
+    ...metrics,
     direction: '多',
     currency: 'CNY',
     executionType,
@@ -26,15 +60,13 @@ export const variantRows = positions.map((p, i) => {
     algorithm: i % 3 === 0 ? 'POV' : 'DMA',
     orderRemark: executionType === 'highTouch' ? ['请按委托价格优先处理', '客户指定分批执行', '请关注盘中流动性'][i % 3] : '',
     traderRemark: executionType === 'highTouch' ? ['已受理，正在处理', '建议分批成交', '已反馈可执行价格'][i % 3] : '',
-    opening: i === 1 ? 50 : 0,
     value,
     valueWan: value / 10000,
-    marginOccupied: p.qty * p.cost * marginRate / 100,
+    marginOccupied: metrics.qty * cents(p.cost) * marginRate / 10000,
     marginRate,
     floatingProfit,
-    dailyRealizedProfit,
-    totalProfit: floatingProfit + dailyRealizedProfit,
-    // 持仓表为日终快照；演示数据以该日期作为导出时间筛选依据。
+    totalProfit: floatingProfit + metrics.dailyRealizedProfit,
+    // 演示持仓属于该交易日快照；该日期也是导出时间筛选依据。
     positionDate: '2026-09-18',
     account: 'TZS_T0',
     lotSize: p.lotSize || 100,
