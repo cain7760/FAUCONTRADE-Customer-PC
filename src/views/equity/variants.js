@@ -8,6 +8,6 @@ import './trader-center.css'
 import './trs-order-management.css'
 import './trs-order-management-overrides.css'
 import '../../semantic-colors.css'
-import EquityVariants from './EquityVariants.vue'
+import ExceptionEntry from '../../components/ExceptionEntry.vue'
 
-createApp(EquityVariants).use(ElementPlus).mount('#app')
+createApp(ExceptionEntry).use(ElementPlus).mount('#app')

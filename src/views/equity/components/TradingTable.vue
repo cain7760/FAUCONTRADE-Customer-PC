@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import ExceptionState from '../../../components/ExceptionState.vue'
 
 defineOptions({ inheritAttrs: false })
 const table = ref(null)
@@ -11,7 +12,7 @@ defineExpose({
 </script>
 
 <template>
-  <el-table ref="table" class="trading-table" v-bind="$attrs"><slot /></el-table>
+  <el-table ref="table" class="trading-table" v-bind="$attrs"><slot /><template #empty><slot name="empty"><ExceptionState type="empty" :description="$attrs['empty-text'] || '当前没有可显示的记录。'" compact :show-action="false" /></slot></template></el-table>
 </template>
 
 <style>
