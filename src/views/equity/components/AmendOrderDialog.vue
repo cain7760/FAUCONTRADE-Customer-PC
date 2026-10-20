@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, InfoFilled } from '@element-plus/icons-vue'
 import { money, number, price as formatPrice } from '../variantData'
 import { useDialogShortcuts } from '../../../composables/useDialogShortcuts'
 import PositionOrderDialog from './PositionOrderDialog.vue'
+import { canUseMarketOrder, normalizeOrderType, orderTypeError } from '../orderMarketRules.js'
 
 const props = defineProps({ modelValue: Boolean, order: Object, symbol: Object, account: Object })
 const emit = defineEmits(['update:modelValue', 'submit'])
@@ -18,6 +19,8 @@ const povMinuteOptions = Array.from({ length: 60 }, (_, minute) => minute)
 const algorithmDisplay = value => value === 'none' ? '无需算法' : value
 const note = ref(''), formError = ref('')
 const isOpen = computed(() => props.modelValue)
+const orderInstrument = computed(() => ({ ...props.order, ...props.symbol, market: props.order?.market || props.symbol?.market }))
+const marketOrderAllowed = computed(() => canUseMarketOrder(orderInstrument.value))
 const isMarket = computed(() => orderType.value === 'market')
 const usesAmount = computed(() => !isMarket.value && quantityMode.value === 'amount')
 const lotSize = computed(() => props.symbol?.lotSize || 100)
@@ -80,6 +83,8 @@ const changed = computed(() => {
 })
 const priceError = computed(() => !isMarket.value && (!Number.isFinite(effectivePrice.value) || effectivePrice.value <= 0) ? '请输入有效的限价。' : '')
 const validationError = computed(() => {
+  const typeError = orderTypeError(orderType.value, orderInstrument.value)
+  if (typeError) return typeError
   if (!Number.isFinite(nextQuantity.value) || nextQuantity.value <= 0) return '请输入有效的订单数量或金额。'
   if (nextQuantity.value < filledQuantity.value) return `修改后的订单数量不得低于已成数量 ${number(filledQuantity.value)} 股。`
   if (side.value === 'sell' && remainingQuantity.value > maximumQuantity.value) return `未成交卖出数量不得超过 ${number(maximumQuantity.value)} 股。`
@@ -103,7 +108,7 @@ watch(() => props.order, order => {
   algorithmPopoverVisible.value = false
   executionType.value = order?.executionType === 'highTouch' ? 'highTouch' : 'lowTouch'
   side.value = order?.side || 'buy'
-  orderType.value = order?.type === 'market' ? 'market' : 'limit'
+  orderType.value = normalizeOrderType(order?.type, orderInstrument.value)
   price.value = order?.price ?? null
   quantityMode.value = order?.type === 'market' || order?.inputAmount == null ? 'quantity' : 'amount'
   quantity.value = order?.quantity ?? null
@@ -117,7 +122,10 @@ watch(() => props.order, order => {
   note.value = order?.orderRemark || order?.note || ''
   formError.value = ''
 }, { immediate: true })
-watch(orderType, type => { if (type === 'market') quantityMode.value = 'quantity' })
+watch([orderInstrument, orderType], () => {
+  orderType.value = normalizeOrderType(orderType.value, orderInstrument.value)
+  if (orderType.value === 'market') quantityMode.value = 'quantity'
+}, { immediate: true })
 watch(quote, value => { if (value) { orderType.value = 'limit'; price.value = value.price } })
 watch([executionType, side, orderType, price, quantityMode, quantity, amount, algorithm, povHours, povMinutes, povParticipation, note], () => { formError.value = '' })
 
@@ -160,7 +168,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
 </script>
 
 <template>
-  <PositionOrderDialog :model-value="modelValue" title="改单" :position="symbol" :account="account" class="amend-order-dialog" hide-metrics currency="CNY" @update:model-value="emit('update:modelValue', $event)" @quote="quote = $event">
+  <PositionOrderDialog :model-value="modelValue" title="改单" :position="symbol" :account="account" class="amend-order-dialog" hide-metrics :currency="orderInstrument.currency || (orderInstrument.market === 'HK' ? 'HKD' : 'CNY')" @update:model-value="emit('update:modelValue', $event)" @quote="quote = $event">
     <template #overview>
       <section class="amend-order-overview" aria-label="原订单信息">
         <header class="amend-order-overview-heading"><div class="amend-order-overview-title"><h3>原订单信息</h3><span class="execution-type-tag" :class="order.executionType === 'highTouch' ? 'is-high-touch' : 'is-low-touch'">{{ order.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></div><span>原订单编号：<b :title="order.orderNo">{{ order.orderNo }}</b></span></header>
@@ -178,7 +186,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
           <div class="order-account-block"><div class="field-caption"><span>下单账户</span></div><div class="amend-readonly" :title="order.accountLabel || (account?.id || order.account) + ' - ' + (account?.name || '')">{{ order.accountLabel || (account?.id || order.account) + ' - ' + (account?.name || '') }}</div></div>
         </section>
         <section class="price-block">
-          <div class="field-caption"><label for="amend-price">订单价格</label><el-radio-group v-model="orderType" class="quantity-mode order-price-type" size="small" aria-label="价格类型"><el-radio-button label="limit">限价</el-radio-button><el-radio-button label="market">市价</el-radio-button></el-radio-group></div>
+          <div class="field-caption"><label for="amend-price">订单价格</label><el-radio-group v-model="orderType" class="quantity-mode order-price-type" size="small" aria-label="价格类型"><el-radio-button label="limit">限价</el-radio-button><el-radio-button v-if="marketOrderAllowed" label="market">市价</el-radio-button></el-radio-group></div>
           <div v-if="!isMarket" class="price-input-row"><el-input-number id="amend-price" v-model="price" placeholder="请输入" :step=".01" :precision="2" :controls="false" /><span class="price-stepper"><button type="button" aria-label="增加订单价格" @click="stepPrice(1)"><el-icon><ArrowUp /></el-icon></button><button type="button" aria-label="减少订单价格" @click="stepPrice(-1)"><el-icon><ArrowDown /></el-icon></button></span></div>
           <div v-else class="market-price-note"><b>以市场价格成交</b></div>
           <p v-if="priceError" class="amend-order-hint is-error" role="status">{{ priceError }}</p>

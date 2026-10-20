@@ -7,6 +7,7 @@ import { globalTradingConfig } from '../../../config/globalTradingConfig'
 import { useDialogShortcuts } from '../../../composables/useDialogShortcuts'
 import BaseDialog from '../../../components/BaseDialog.vue'
 import { defaultAlgorithmForMarket } from '../orderAlgorithmDefaults'
+import { canUseMarketOrder, normalizeOrderType, orderTypeError } from '../orderMarketRules.js'
 const props = defineProps({ instruments: Array, accounts: Array, symbol: Object, account: Object, quote: Object, paused: Boolean, lockedContext: Boolean, customerOrderReadonly: Boolean, closeMode: Boolean, showFramework: Boolean, ticketContext: Object, initialOrder: Object, counterparties: { type: Array, default: () => [] } })
 const emit = defineEmits(['select', 'account-select', 'order'])
 const algorithmValues = ['POV', 'DMA', 'none']
@@ -17,7 +18,7 @@ const initialAlgorithm = algorithmValues.includes(props.initialOrder?.algorithm)
     ? props.ticketContext.algorithm
     : defaultAlgorithmForMarket(props.symbol?.market)
 const initialExecutionType = props.initialOrder?.executionType || props.ticketContext?.executionType
-const executionType = ref(initialExecutionType === 'highTouch' ? 'highTouch' : 'lowTouch'), algorithm = ref(initialAlgorithm), algorithmPopoverVisible = ref(false), orderType = ref(props.initialOrder?.type === 'market' ? 'market' : 'limit'), price = ref(props.initialOrder?.price), quantity = ref(props.initialOrder?.quantity), amount = ref(props.initialOrder?.amount), quantityMode = ref(props.initialOrder?.type === 'market' ? 'quantity' : props.initialOrder?.quantityMode || 'quantity'), fraction = ref(0), note = ref(props.initialOrder?.note || '')
+const executionType = ref(initialExecutionType === 'highTouch' ? 'highTouch' : 'lowTouch'), algorithm = ref(initialAlgorithm), algorithmPopoverVisible = ref(false), orderType = ref(normalizeOrderType(props.initialOrder?.type, props.symbol)), price = ref(props.initialOrder?.price), quantity = ref(props.initialOrder?.quantity), amount = ref(props.initialOrder?.amount), quantityMode = ref(props.initialOrder?.type === 'market' ? 'quantity' : props.initialOrder?.quantityMode || 'quantity'), fraction = ref(0), note = ref(props.initialOrder?.note || '')
 const counterparty = ref(props.initialOrder?.counterparty || '')
 const povHours = ref(props.initialOrder?.algorithmParams?.hours ?? 1)
 const povMinutes = ref(props.initialOrder?.algorithmParams?.minutes ?? 0)
@@ -57,6 +58,8 @@ const fieldsLocked = computed(() => props.lockedContext || props.customerOrderRe
 const isCustomManualInstrument = computed(() => isManualOrder.value && !!selectedManualInstrument.value?.isManual)
 const selectableInstruments = computed(() => [...props.instruments, ...(isManualOrder.value ? manualInstruments.value : [])])
 const ticketSymbol = computed(() => selectedManualInstrument.value || props.symbol)
+const ticketCurrency = computed(() => ticketSymbol.value?.currency || (ticketSymbol.value?.market === 'HK' ? 'HKD' : ticketSymbol.value?.market === 'US' ? 'USD' : 'CNY'))
+const marketOrderAllowed = computed(() => canUseMarketOrder(ticketSymbol.value))
 const lotSize = computed(() => {
   if (!displaySymbolCode.value || ticketSymbol.value?.isManual) return null
   const value = Number(ticketSymbol.value?.lotSize)
@@ -64,14 +67,11 @@ const lotSize = computed(() => {
 })
 const lotSizeLabel = computed(() => lotSize.value ? `${number(lotSize.value)}股/手` : '')
 const symbols = computed(() => selectableInstruments.value.filter(p => {
-  const matchesMarket = symbolMarket.value === 'ALL'
-    ? (p.isManual || p.market !== 'HK')
-    : p.isManual
-      ? p.market === symbolMarket.value
-      : symbolMarket.value === 'A' && ['SZ', 'SH'].includes(p.market)
+  const matchesMarket = symbolMarket.value === 'ALL' || p.market === symbolMarket.value
+    || (symbolMarket.value === 'A' && ['SZ', 'SH'].includes(p.market))
   return matchesMarket && `${p.name}${p.code}`.toLowerCase().includes(search.value.toLowerCase())
 }))
-const recentSymbols = computed(() => (recentCodesByExecution.value[executionType.value] || []).map(code => selectableInstruments.value.find(item => item.code === code)).filter(item => item && (item.isManual || item.market !== 'HK')))
+const recentSymbols = computed(() => (recentCodesByExecution.value[executionType.value] || []).map(code => selectableInstruments.value.find(item => item.code === code)).filter(Boolean))
 const filteredAccounts = computed(() => {
   const keyword = accountSearch.value.trim().toLowerCase()
   return keyword ? props.accounts.filter(item => `${item.id}${item.name}`.toLowerCase().includes(keyword)) : props.accounts
@@ -123,7 +123,7 @@ function percentageShares(maximum) {
 }
 const buyShares = computed(() => usesPercentage.value ? percentageShares(maxBuy.value) : shares.value)
 const sellShares = computed(() => usesPercentage.value ? percentageShares(maxSell.value) : shares.value)
-const commonValid = computed(() => !!displaySymbolCode.value && algorithmValid.value && counterpartyValid.value && (orderType.value === 'market' || price.value > 0))
+const commonValid = computed(() => !!displaySymbolCode.value && !orderTypeError(orderType.value, ticketSymbol.value) && algorithmValid.value && counterpartyValid.value && (orderType.value === 'market' || price.value > 0))
 function validQuantity(value) {
   return value > 0 && (isCustomManualInstrument.value ? Number.isInteger(value) : value % (lotSize.value || 100) === 0)
 }
@@ -145,7 +145,8 @@ function rememberRecent(code) {
 function chooseSymbol(code) {
   if (props.customerOrderReadonly) return
   const instrument = selectableInstruments.value.find(item => item.code === code)
-  if (!code || (instrument?.market === 'HK' && !instrument.isManual)) return
+  if (!code || !instrument) return
+  orderType.value = normalizeOrderType(orderType.value, instrument)
   displaySymbolCode.value = code
   rememberRecent(code)
   resetOrder()
@@ -228,7 +229,7 @@ watch(() => props.initialOrder, value => {
   selectedManualInstrument.value = null
   executionType.value = value.executionType === 'highTouch' ? 'highTouch' : 'lowTouch'
   algorithm.value = algorithmValues.includes(value.algorithm) ? value.algorithm : defaultAlgorithmForMarket(props.symbol.market)
-  orderType.value = value.type === 'market' ? 'market' : 'limit'
+  orderType.value = normalizeOrderType(value.type, ticketSymbol.value)
   price.value = value.price
   quantity.value = value.quantity
   amount.value = value.amount
@@ -244,7 +245,11 @@ watch(() => props.initialOrder, value => {
   nextTick(() => { applyingInitialOrder = false })
 }, { deep: true })
 watch(() => props.account.id, () => { if (props.customerOrderReadonly) return; applyAccountFramework(props.account); resetOrder() })
-watch(orderType, type => { if (type === 'market') quantityMode.value = 'quantity' }, { immediate: true })
+watch([ticketSymbol, orderType], () => {
+  orderType.value = normalizeOrderType(orderType.value, ticketSymbol.value)
+  if (orderType.value === 'market') quantityMode.value = 'quantity'
+  confirming.value = false
+}, { immediate: true })
 watch([orderType, unit], () => { if (!props.customerOrderReadonly && !applyingInitialOrder) reset() })
 watch(quantityMode, mode => { if (mode !== 'percentage' && !props.customerOrderReadonly && !applyingInitialOrder) reset() })
 watch(executionType, () => { if (props.customerOrderReadonly) return; selectedManualInstrument.value = null; displaySymbolCode.value = props.symbol.code; search.value = ''; price.value = props.symbol.price; resetOrder() })
@@ -285,10 +290,15 @@ function preview(side) {
   }
   if (!isCustomManualInstrument.value && side === 'buy' && estimatedPrice.value * orderQuantity > props.account.cash) { insufficientFunds.value = true; return }
   const id = Date.now()
-  snapshot.value = { id, orderNo: `WT${id}`, account: sourceAccountValue.value, accountLabel: sourceAccountLabel.value, ...(props.showFramework && sourceFrameworkName.value ? { frameworkId: frameworkId.value, framework: sourceFrameworkName.value } : {}), ...(props.counterparties.length ? { counterparty: selectedCounterparty.value, executionChannel: selectedCounterparty.value ? 'counterparty' : 'offline' } : {}), ...(algorithm.value === 'POV' ? { algorithmParams: { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value) } } : {}), code: ticketSymbol.value.code, name: ticketSymbol.value.name, executionType: executionType.value, algorithm: algorithm.value, note: note.value.trim(), type: orderType.value, side, quantity: orderQuantity, inputAmount: usesAmount.value ? amount.value : null, price: orderType.value === 'limit' ? price.value : null, estimate: estimatedPrice.value * orderQuantity, status: '待报', runStatus: '正常', openClose: props.initialOrder?.openClose || (props.closeMode ? '平' : '开'), attribute: `${orderType.value === 'limit' ? '限价' : '市价'}·${usesAmount.value ? '金额' : '数量'}`, orderValueNumber: usesAmount.value ? amount.value : orderQuantity, orderValue: usesAmount.value ? `${money(amount.value || 0)} CNY` : `${number(orderQuantity)} 股`, filledQuantity: 0, filledPrice: null }
+  snapshot.value = { id, orderNo: `WT${id}`, account: sourceAccountValue.value, accountLabel: sourceAccountLabel.value, ...(props.showFramework && sourceFrameworkName.value ? { frameworkId: frameworkId.value, framework: sourceFrameworkName.value } : {}), ...(props.counterparties.length ? { counterparty: selectedCounterparty.value, executionChannel: selectedCounterparty.value ? 'counterparty' : 'offline' } : {}), ...(algorithm.value === 'POV' ? { algorithmParams: { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value) } } : {}), code: ticketSymbol.value.code, name: ticketSymbol.value.name, market: ticketSymbol.value.market, currency: ticketSymbol.value.currency || (ticketSymbol.value.market === 'HK' ? 'HKD' : 'CNY'), lotSize: lotSize.value, isManual: !!ticketSymbol.value.isManual, executionType: executionType.value, algorithm: algorithm.value, note: note.value.trim(), type: orderType.value, side, quantity: orderQuantity, inputAmount: usesAmount.value ? amount.value : null, price: orderType.value === 'limit' ? price.value : null, estimate: estimatedPrice.value * orderQuantity, status: '待报', runStatus: '正常', openClose: props.initialOrder?.openClose || (props.closeMode ? '平' : '开'), attribute: `${orderType.value === 'limit' ? '限价' : '市价'}·${usesAmount.value ? '金额' : '数量'}`, orderValueNumber: usesAmount.value ? amount.value : orderQuantity, orderValue: usesAmount.value ? `${money(amount.value || 0)} CNY` : `${number(orderQuantity)} 股`, filledQuantity: 0, filledPrice: null }
   confirming.value = true
 }
-function submit() { if (props.paused) { confirming.value = false; return }; emit('order', { ...snapshot.value }); ElMessage.success('操作成功。'); resetOrder() }
+function submit() {
+  if (props.paused || !snapshot.value) { confirming.value = false; return }
+  const error = orderTypeError(snapshot.value.type, snapshot.value)
+  if (error) { ElMessage.error(error); confirming.value = false; return }
+  emit('order', { ...snapshot.value }); ElMessage.success('操作成功。'); resetOrder()
+}
 useDialogShortcuts(confirming, { confirm: submit, cancel: () => { confirming.value = false } })
 useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, cancel: () => { manualInstrumentVisible.value = false }, confirmOnInput: true })
 </script>
@@ -314,7 +324,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
       </div>
     </section>
     <section class="order-symbol-block">
-      <div class="field-caption"><span>下单标的</span><div class="symbol-tags"><span>CNY</span><el-tooltip content="40% IA"><span>40% IA</span></el-tooltip></div></div>
+      <div class="field-caption"><span>下单标的</span><div class="symbol-tags"><span>{{ ticketCurrency }}</span><el-tooltip content="40% IA"><span>40% IA</span></el-tooltip></div></div>
       <div class="instrument-select-wrap"><el-select :disabled="fieldsLocked" ref="instrumentSelect" v-model="displaySymbolCode" filterable :filter-method="v => search = v" @visible-change="handleInstrumentVisible" @change="chooseSymbol" :popper-style="instrumentPopperWidth ? { width: `${instrumentPopperWidth}px`, minWidth: `${instrumentPopperWidth}px` } : undefined" placeholder="搜索标的名称 / 代码" aria-label="下单标的" class="instrument-select" popper-class="variant-popper instrument-popper" placement="bottom-start" :offset="4">
         <template #header><div class="instrument-select-header"><div v-if="recentSymbols.length" class="instrument-history"><span>搜索历史</span><div><div v-for="item in recentSymbols" :key="item.code" class="instrument-history-chip"><button type="button" class="instrument-history-select" @mousedown.prevent @click.stop="chooseRecentSymbol(item.code)">{{ item.name }}（{{ item.code }}）</button><button type="button" class="instrument-history-remove" :aria-label="`删除历史标的 ${item.name}`" title="删除" @mousedown.prevent @click.stop="removeRecentSymbol(item.code)">×</button></div></div></div><div class="instrument-market-tabs"><button v-for="item in [['ALL','全部'],['A','A股'],['HK','港股'],['US','美股']]" :key="item[0]" type="button" :class="{ active: symbolMarket === item[0] }" @mousedown.prevent @click="symbolMarket = item[0]">{{ item[1] }}</button></div></div></template>
         <template #empty><div class="instrument-empty"><template v-if="isManualOrder && search.trim()"><b>未找到匹配标的</b><span>该标的不在系统标的库中，可手动新增后用于本次手工单。</span><el-button type="primary" @mousedown.prevent @click.stop="openManualInstrument">手动新增标的</el-button></template><span v-else>暂无匹配标的</span></div></template>
@@ -322,8 +332,8 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
       </el-select><button v-if="displaySymbolCode && !fieldsLocked" type="button" class="symbol-clear-button" aria-label="清空下单标的" title="清空下单标的" @click.stop="clearInstrument"><el-icon><CircleClose /></el-icon></button></div>
     </section>
     <section class="price-block">
-      <template v-if="orderType === 'limit'"><div class="field-caption"><label for="variant-price">订单价格</label><el-radio-group v-model="orderType" class="quantity-mode order-price-type" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="limit">限价</el-radio-button><el-radio-button label="market">市价</el-radio-button></el-radio-group></div><div class="price-input-row" :class="{ 'is-error': priceInvalid }"><el-input-number id="variant-price" v-model="price" placeholder="请输入" :disabled="customerOrderReadonly" :step=".01" :precision="2" :controls="false" /><span class="price-stepper"><button type="button" :disabled="customerOrderReadonly" aria-label="增加订单价格" @click="stepPrice(1)"><el-icon><ArrowUp /></el-icon></button><button type="button" :disabled="customerOrderReadonly" aria-label="减少订单价格" @click="stepPrice(-1)"><el-icon><ArrowDown /></el-icon></button></span></div><span v-if="priceInvalid" class="price-error">订单价格不可为0，请重试</span></template>
-      <template v-else><div class="field-caption"><span>订单价格</span><el-radio-group v-model="orderType" class="quantity-mode order-price-type" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="limit">限价</el-radio-button><el-radio-button label="market">市价</el-radio-button></el-radio-group></div><div class="market-price-note"><b>以市场价格成交</b></div></template>
+      <template v-if="orderType === 'limit'"><div class="field-caption"><label for="variant-price">订单价格</label><el-radio-group v-model="orderType" class="quantity-mode order-price-type" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="limit">限价</el-radio-button><el-radio-button v-if="marketOrderAllowed" label="market">市价</el-radio-button></el-radio-group></div><div class="price-input-row" :class="{ 'is-error': priceInvalid }"><el-input-number id="variant-price" v-model="price" placeholder="请输入" :disabled="customerOrderReadonly" :step=".01" :precision="2" :controls="false" /><span class="price-stepper"><button type="button" :disabled="customerOrderReadonly" aria-label="增加订单价格" @click="stepPrice(1)"><el-icon><ArrowUp /></el-icon></button><button type="button" :disabled="customerOrderReadonly" aria-label="减少订单价格" @click="stepPrice(-1)"><el-icon><ArrowDown /></el-icon></button></span></div><span v-if="priceInvalid" class="price-error">订单价格不可为0，请重试</span></template>
+      <template v-else><div class="field-caption"><span>订单价格</span><el-radio-group v-model="orderType" class="quantity-mode order-price-type" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="limit">限价</el-radio-button><el-radio-button v-if="marketOrderAllowed" label="market">市价</el-radio-button></el-radio-group></div><div class="market-price-note"><b>以市场价格成交</b></div></template>
     </section>
     <section class="quantity-block">
       <div class="field-caption"><label :for="usesPercentage ? 'variant-percentage' : usesAmount ? 'variant-amount' : 'variant-quantity'">{{ usesAmount ? '订单金额' : '订单数量' }}</label><div class="quantity-caption-actions"><span v-if="!usesAmount && lotSizeLabel" class="order-lot-tag">{{ lotSizeLabel }}</span><el-radio-group v-model="quantityMode" class="quantity-mode" size="small" :disabled="customerOrderReadonly" :aria-readonly="customerOrderReadonly"><el-radio-button label="quantity">数量</el-radio-button><el-radio-button v-if="orderType === 'limit'" label="amount">金额</el-radio-button></el-radio-group></div></div>
@@ -340,7 +350,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
     <section v-if="executionType === 'highTouch' || customerOrderReadonly" class="order-note-block"><div class="field-caption"><label for="manual-order-note">备注</label></div><el-input id="manual-order-note" v-model="note" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入备注" /></section>
     <section class="submit-block"><div class="trade-buttons"><el-button v-if="!sourceOrderSide || sourceOrderSide === 'buy'" class="buy-action" :disabled="!canBuy" @click="preview('buy')">买入</el-button><el-button v-if="!sourceOrderSide || sourceOrderSide === 'sell'" class="sell-action" :disabled="!canSell" @click="preview('sell')">卖出</el-button></div><template v-if="executionType === 'lowTouch'"><div class="order-totals"><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入预估(股)</span><b>{{ buyShares ? number(buyShares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>卖出预估(股)</span></div><b>{{ sellShares ? number(sellShares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入金额(CNY)</span><b>{{ buyShares ? money(buyShares * (estimatedPrice || 0)) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>预估卖出金额(CNY)</span></div><b>{{ sellShares ? money(sellShares * (estimatedPrice || 0)) : '--' }}</b></div></div></template></section>
   </div>
-  <BaseDialog v-model="confirming" :title="confirmationTitle" width="460px" align-center append-to-body class="variant-confirm order-confirm" :close-on-press-escape="false"><template v-if="snapshot"><div class="confirm-identity" :class="snapshot.side"><span>{{ snapshot.side === 'buy' ? '买入' : '卖出' }}</span><strong>{{ snapshot.name }}</strong><small>{{ snapshot.code }}</small></div><div class="confirm-key-metrics"><div><span>订单价格(CNY)</span><b>{{ snapshot.type === 'limit' ? money(snapshot.price) : '市价' }}</b></div><div><span>订单数量(股)</span><b>{{ number(snapshot.quantity) }}</b></div><div><span>预估金额(CNY)</span><b>{{ money(snapshot.estimate) }}</b></div></div><dl class="confirm-details"><dt>下单账户</dt><dd>{{ snapshot.accountLabel || snapshot.account }}</dd><template v-if="snapshot.framework"><dt>客户框架</dt><dd>{{ snapshot.framework }}</dd></template><template v-if="snapshot.executionChannel"><dt>上手方</dt><dd>{{ snapshot.counterparty || '线下单' }}</dd></template><template v-if="snapshot.algorithmParams"><dt>运行时间</dt><dd>{{ snapshot.algorithmParams.hours }} 时 {{ snapshot.algorithmParams.minutes }} 分</dd><dt>市场成交占比</dt><dd>{{ snapshot.algorithmParams.participation }}%</dd></template><template v-if="snapshot.inputAmount !== null"><dt>订单金额</dt><dd>{{ money(snapshot.inputAmount) }} CNY</dd></template><dt>订单类型</dt><dd><span class="order-confirm-tag">{{ snapshot.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></dd><dt>执行算法</dt><dd><span class="order-confirm-tag">{{ algorithmDisplay(snapshot.algorithm) }}</span></dd><dt>订单方式</dt><dd><span class="order-confirm-tag">{{ snapshot.type === 'limit' ? '限价单' : '市价单' }}</span></dd><template v-if="snapshot.note"><dt>备注</dt><dd>{{ snapshot.note }}</dd></template></dl></template><template #footer><el-button @click="confirming = false">返回</el-button><el-button type="primary" @click="submit">确认{{ snapshot?.side === 'buy' ? '买入' : '卖出' }}</el-button></template></BaseDialog>
+  <BaseDialog v-model="confirming" :title="confirmationTitle" width="460px" align-center append-to-body class="variant-confirm order-confirm" :close-on-press-escape="false"><template v-if="snapshot"><div class="confirm-identity" :class="snapshot.side"><span>{{ snapshot.side === 'buy' ? '买入' : '卖出' }}</span><strong>{{ snapshot.name }}</strong><small>{{ snapshot.code }}</small></div><div class="confirm-key-metrics"><div><span>订单价格({{ snapshot.currency }})</span><b>{{ snapshot.type === 'limit' ? money(snapshot.price) : '市价' }}</b></div><div><span>订单数量(股)</span><b>{{ number(snapshot.quantity) }}</b></div><div><span>预估金额(CNY)</span><b>{{ money(snapshot.estimate) }}</b></div></div><dl class="confirm-details"><dt>下单账户</dt><dd>{{ snapshot.accountLabel || snapshot.account }}</dd><template v-if="snapshot.framework"><dt>客户框架</dt><dd>{{ snapshot.framework }}</dd></template><template v-if="snapshot.executionChannel"><dt>上手方</dt><dd>{{ snapshot.counterparty || '线下单' }}</dd></template><template v-if="snapshot.algorithmParams"><dt>运行时间</dt><dd>{{ snapshot.algorithmParams.hours }} 时 {{ snapshot.algorithmParams.minutes }} 分</dd><dt>市场成交占比</dt><dd>{{ snapshot.algorithmParams.participation }}%</dd></template><template v-if="snapshot.inputAmount !== null"><dt>订单金额</dt><dd>{{ money(snapshot.inputAmount) }} CNY</dd></template><dt>订单类型</dt><dd><span class="order-confirm-tag">{{ snapshot.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></dd><dt>执行算法</dt><dd><span class="order-confirm-tag">{{ algorithmDisplay(snapshot.algorithm) }}</span></dd><dt>订单方式</dt><dd><span class="order-confirm-tag">{{ snapshot.type === 'limit' ? '限价单' : '市价单' }}</span></dd><template v-if="snapshot.note"><dt>备注</dt><dd>{{ snapshot.note }}</dd></template></dl></template><template #footer><el-button @click="confirming = false">返回</el-button><el-button type="primary" @click="submit">确认{{ snapshot?.side === 'buy' ? '买入' : '卖出' }}</el-button></template></BaseDialog>
   <BaseDialog v-model="manualInstrumentVisible" title="手动新增标的" width="400px" align-center append-to-body class="variant-confirm manual-instrument-dialog" :close-on-press-escape="false"><p class="manual-instrument-notice">您正在添加非标准标的，请确认标的名称、代码和市场。</p><div class="manual-instrument-form"><label>标的名称<el-input v-model="manualInstrumentName" placeholder="请输入标的名称" /></label><label>标的代码<el-input v-model="manualInstrumentCode" placeholder="请输入标的代码" /></label><label>所属市场<el-select v-model="manualInstrumentMarket" aria-label="所属市场" popper-class="variant-popper"><el-option v-for="item in manualInstrumentMarketOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></label><p v-if="manualInstrumentError" class="manual-instrument-error" role="alert">{{ manualInstrumentError }}</p></div><template #footer><el-button @click="manualInstrumentVisible = false">取消[Esc]</el-button><el-button type="primary" @click="saveManualInstrument">新增标的[Enter]</el-button></template></BaseDialog>
   <BaseDialog v-model="insufficientFunds" title="可用余额不足" width="380px" align-center append-to-body class="variant-confirm insufficient-funds"><div class="balance-compare"><div><span>本次买入预计需</span><b>{{ money(buyShares * (estimatedPrice || 0)) }}</b><small>CNY</small></div><div><span>账户可用余额</span><b>{{ money(account.cash) }}</b><small>CNY</small></div></div><p class="dim">请降低订单数量或订单价格后重试。</p><template #footer><el-button type="primary" @click="insufficientFunds = false">我知道了</el-button></template></BaseDialog>
 </template>

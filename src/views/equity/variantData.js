@@ -1,3 +1,4 @@
+import { hongKongDemoInstruments } from './hongKongInstruments.js'
 import { positions } from './fixtures'
 const truncate = (value, digits) => {
   const factor = 10 ** digits
@@ -78,12 +79,13 @@ export const variantRows = positions.map((p, i) => {
 const marketLabels = ['华远科技', '新城制造', '中原能源', '海岳医药', '智联电子', '云帆软件', '国泰材料', '远景通信', '华夏消费', '深港物流']
 export const marketInstruments = [
   ...variantRows,
+  ...hongKongDemoInstruments,
   ...Array.from({ length: 220 }, (_, index) => {
     const serial = index + 1
     const market = serial % 10 === 0 ? 'HK' : serial % 2 ? 'SZ' : 'SH'
     const code = market === 'HK' ? String(1000 + serial).padStart(5, '0') : String(100000 + serial).padStart(6, '0')
     const price = Number((6.5 + (serial * 1.73) % 183).toFixed(2))
-    return { id: `M-${serial}`, code, name: `${marketLabels[index % marketLabels.length]} ${String(serial).padStart(3, '0')}`, market, price, cost: Number((price * .97).toFixed(2)), change: 0, qty: 0, available: 0, lotSize: 100 }
+    return { id: `M-${serial}`, code, name: `${marketLabels[index % marketLabels.length]} ${String(serial).padStart(3, '0')}`, market, currency: market === 'HK' ? 'HKD' : 'CNY', price, cost: Number((price * .97).toFixed(2)), change: 0, qty: 0, available: 0, lotSize: 100 }
   }),
 ]
 export const variants = [

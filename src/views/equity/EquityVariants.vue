@@ -7,6 +7,7 @@ import SettingsMenuIcon from '../../SettingsMenuIcon.vue'
 import { accounts } from './fixtures'
 import { marketInstruments, variantRows, variants, money, number, price as formatPrice } from './variantData'
 import { columnOptionsFor } from './tableFieldDefinitions'
+import { orderTypeError } from './orderMarketRules.js'
 import { positionMarginInCny } from './positionCurrency'
 import { useTicketDock } from './useTicketDock'
 import { useDialogShortcuts } from '../../composables/useDialogShortcuts'
@@ -15,7 +16,6 @@ import { addManualEquityOrderToPool, recordPlacedTrsOrder } from './trsOrderStor
 import TradingAppShell from '../../layout/TradingAppShell.vue'
 import { tradingContextKey } from './tradingContext'
 import EquityTradingPage from './pages/EquityTradingPage.vue'
-import TraderCenterPage from './pages/TraderCenterPage.vue'
 import OptionsTradingPage from './pages/OptionsTradingPage.vue'
 import FinancingPage from './pages/FinancingPage.vue'
 import StrategyTradingPage from './pages/StrategyTradingPage.vue'
@@ -83,7 +83,7 @@ const mainNav = [
   { label: '期权交易', icon: [['u83.svg', 0, 0, 13, 14], ['u84.svg', 7, 8, 6, 6]] },
   { label: '融资申请', icon: [['u90.svg', 2, 0, 10, 8], ['u91.svg', 0, 9, 14, 5]] },
   { label: '策略交易', hidden: true, icon: [['u100.svg', 0, 0, 12, 12], ['u101.svg', 3, 11, 7, 5]] },
-  { label: '交易员中心', icon: [['u100.svg', 0, 0, 12, 12], ['u101.svg', 3, 11, 7, 5]] },
+  { label: '交易员中心', hidden: true, icon: [['u100.svg', 0, 0, 12, 12], ['u101.svg', 3, 11, 7, 5]] },
   { label: '数据', icon: [['u114.svg', 0, 0, 12, 13], ['u115.svg', 7, 6, 8, 8]] },
 ]
 const availableNav = computed(() => mainNav.filter(item => !item.hidden))
@@ -105,11 +105,8 @@ function selectTraderPrimary(key) {
   activeTraderSecondary.value = group.children[0].label
 }
 function selectProductNav(label) {
+  if (!availableNav.value.some(item => item.label === label)) return
   activeNav.value = label
-  if (label === '交易员中心') {
-    activeTraderPrimary.value = 'swap'
-    activeTraderSecondary.value = '订单管理'
-  }
 }
 const allAccountsValue = '__ALL_ACCOUNTS__'
 const workspace = ref(null), accountId = ref('TZS_T0'), selectedAccountIds = ref(['TZS_T0']), previousAccountSelection = ref(['TZS_T0']), query = ref(''), market = ref('ALL'), positionType = ref('ALL')
@@ -689,6 +686,8 @@ function assetAmountParts(value) {
 }
 function acceptOrder(order, { skipHtSync = false } = {}) {
   if (!systemRunning.value) return
+  const typeError = orderTypeError(order.type, order)
+  if (typeError) { ElMessage.error(typeError); return }
   demoOrders.value.unshift(enrichOrder(order))
   if (!skipHtSync) addManualEquityOrderToPool(order)
   tab.value = 'orders'
@@ -756,12 +755,16 @@ function openChaseOrder(row) {
 }
 function acceptClosePosition(order) {
   if (!systemRunning.value) return
+  const typeError = orderTypeError(order.type, order)
+  if (typeError) { ElMessage.error(typeError); return }
   demoOrders.value.unshift(enrichOrder(order))
   tab.value = 'orders'
   publishTransactionMessage({ name: order.name, code: order.code, status: '卖出平仓订单已提交', quantity: order.quantity, quantityLabel: '订单数量', title: '平仓订单提交成功' })
 }
 function acceptChaseOrder(order) {
   if (!systemRunning.value) return
+  const typeError = orderTypeError(order.type, order)
+  if (typeError) { ElMessage.error(typeError); return }
   const nextOrder = enrichOrder(order)
   demoOrders.value.unshift(nextOrder)
   publishOrderActivityMessage(nextOrder)
@@ -817,6 +820,8 @@ function acceptAmendOrder(amendment) {
   if (!systemRunning.value) return
   const row = demoOrders.value.find(item => item.id === amendment.orderId)
   if (!row || !canOperateOrder(row)) return
+  const typeError = orderTypeError(amendment.type, { ...amendingSymbol.value, ...row })
+  if (typeError) { ElMessage.error(typeError); return }
   const isLimit = amendment.type !== 'market'
   const nextPrice = isLimit ? amendment.price : null
   const delta = amendment.quantityDelta
@@ -990,8 +995,7 @@ provide(tradingContextKey, {
 
 <template>
   <TradingAppShell :variant="variant" :visible-nav="visibleNav" :overflow-nav="overflowNav" :active-nav="activeNav" :show-header-notice="showHeaderNotice" :system-notice-enabled="systemNoticeEnabled" :system-running="systemRunning" :header-notice="headerNotice" :show-unread-badge="showUnreadBadge" :unread-message-count="unreadMessageCount" :help-center-url="helpCenterUrl" @select-nav="selectProductNav" @open-message-center="openMessageCenter" @dismiss-notice="dismissHeaderNotice" @open-settings="settingsVisible=true" @open-help-center="openHelpCenter" @trigger-demo-toast="triggerDemoTransactionToast">
-    <TraderCenterPage v-if="activeNav === '交易员中心'" />
-    <OptionsTradingPage v-else-if="activeNav === '期权交易'" />
+    <OptionsTradingPage v-if="activeNav === '期权交易'" />
     <FinancingPage v-else-if="activeNav === '融资申请'" />
     <StrategyTradingPage v-else-if="activeNav === '策略交易'" />
     <DataPage v-else-if="activeNav === '数据'" />

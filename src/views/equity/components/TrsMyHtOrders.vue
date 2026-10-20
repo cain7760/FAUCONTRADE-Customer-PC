@@ -10,6 +10,7 @@ import TrsSplitDraftTable from './TrsSplitDraftTable.vue'
 import TrsSystemOrdersTable from './TrsSystemOrdersTable.vue'
 import TrsDoneOrdersTable from './TrsDoneOrdersTable.vue'
 import { positions } from '../fixtures'
+import { normalizeOrderType, orderTypeError } from '../orderMarketRules.js'
 import { claimedHtOrders, placedTrsOrders } from '../trsOrderStore'
 
 const emit = defineEmits(['back-to-pool', 'place-order', 'deal-recorded'])
@@ -685,6 +686,8 @@ function confirmSplitAlgorithmConfig() {
   splitAlgorithmPopoverLineId.value = null
 }
 function confirmSplit() {
+  const typeError = splitLines.value.map(line => orderTypeError(line.orderType, activeOrder.value)).find(Boolean)
+  if (typeError) { splitError.value = typeError; return }
   if (isApprovalPending.value) return
   if (!splitLines.value.length || splitLines.value.some(line => !line.account || splitLineValue(line) <= 0 || (line.orderType === 'limit' && Number(line.price) <= 0))) { splitError.value = `请补全每笔子单的下单账户、价格和${splitValueLabel.value}。`; return }
   if (placedOrderValue.value + splitAllocatedQuantity.value > originalOrderValue()) { splitError.value = `拆分总${splitValueLabel.value}不能超过客户订单${splitValueLabel.value}。`; return }
@@ -730,7 +733,7 @@ const isEditingSystemOrder = line => editingSystemOrderId.value === line.id
 function editSystemOrderLine(line) {
   if (line?.orderStatus !== '委托中') return
   editingSystemOrderId.value = line.id
-  systemOrderEditDraft.value = { ...line, counterparty: line.counterparty || (activeOrder.value?.standard === '非标' ? 'offline' : '') }
+  systemOrderEditDraft.value = { ...line, orderType: normalizeOrderType(line.orderType, activeOrder.value), counterparty: line.counterparty || (activeOrder.value?.standard === '非标' ? 'offline' : '') }
 }
 function cancelSystemOrderEdit() {
   editingSystemOrderId.value = null
@@ -740,6 +743,8 @@ function saveSystemOrderEdit(line) {
   const target = activeOrder.value?.systemOrders?.find(item => item.id === line.id)
   const draft = systemOrderEditDraft.value
   if (!target || !draft) return
+  const typeError = orderTypeError(draft.orderType, activeOrder.value)
+  if (typeError) { ElMessage.error(typeError); return }
   Object.assign(target, {
     counterparty: draft.counterparty && draft.counterparty !== 'offline' ? draft.counterparty : null,
     strategy: draft.strategy,
@@ -842,7 +847,7 @@ async function refreshCustomerAccount() {
               <span class="trs-split-actions"><strong>已拆{{ splitValueLabel }}：{{ splitAllocatedDisplay }} / 客户订单{{ splitValueLabel }}：{{ originalSplitValueDisplay }}</strong><button type="button" @click="addSplitLine">新增上手方订单</button><button type="button" class="is-primary" @click="confirmSplit">提交拆单</button></span>
             </div>
             <div class="trs-split-table-wrap">
-              <TrsSplitDraftTable v-model:split-lines="splitLines" v-model:split-algorithm-draft="splitAlgorithmDraft" :split-input-label="splitInputLabel" :is-nonstandard-order="isNonstandardOrder" :selectable-split-counterparties="selectableSplitCounterparties" :split-algorithm-popover-line-id="splitAlgorithmPopoverLineId" :pov-hour-options="povHourOptions" :pov-minute-options="povMinuteOptions" :split-algorithm-parameter-error="splitAlgorithmParameterError" :is-amount-order="isAmountOrder" @algorithm-popover="updateSplitAlgorithmPopover" @cancel-algorithm="cancelSplitAlgorithmConfig" @confirm-algorithm="confirmSplitAlgorithmConfig" @remove-line="removeSplitLine" />
+              <TrsSplitDraftTable :instrument="activeOrder" v-model:split-lines="splitLines" v-model:split-algorithm-draft="splitAlgorithmDraft" :split-input-label="splitInputLabel" :is-nonstandard-order="isNonstandardOrder" :selectable-split-counterparties="selectableSplitCounterparties" :split-algorithm-popover-line-id="splitAlgorithmPopoverLineId" :pov-hour-options="povHourOptions" :pov-minute-options="povMinuteOptions" :split-algorithm-parameter-error="splitAlgorithmParameterError" :is-amount-order="isAmountOrder" @algorithm-popover="updateSplitAlgorithmPopover" @cancel-algorithm="cancelSplitAlgorithmConfig" @confirm-algorithm="confirmSplitAlgorithmConfig" @remove-line="removeSplitLine" />
             </div>
             <p v-if="splitError" class="trs-split-validation is-error">{{ splitError }}</p>
           </section>
