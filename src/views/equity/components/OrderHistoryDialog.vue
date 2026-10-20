@@ -29,11 +29,11 @@ function offsetTime(time, seconds) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 function statusRecord(row, time) {
-  const status = row.status || '待确认'
+  const status = row.status || '待报'
   if (status === '全成') return { operator: '交易所', time, type: status, content: `订单已全部成交，成交数量 ${number(row.filledQuantity || row.quantity)} 股。` }
   if (status === '部成') return { operator: '交易所', time, type: status, content: `订单已部分成交，成交数量 ${number(row.filledQuantity || 0)} 股。` }
-  if (status === '部撒' || status === '撤单') return { operator: '当前账户', time, type: status, content: row.feedback || '订单撤单结果已确认。' }
-  if (status === '被拒绝' || status === '审核拒绝') return { operator: '交易员', time, type: status, content: row.traderRemark || row.feedback || '订单未获通过。' }
+  if (status === '部撤' || status === '撤单') return { operator: '当前账户', time, type: status, content: row.feedback || '订单撤单结果已确认。' }
+  if (status === '拒单') return { operator: '交易员', time, type: status, content: row.traderRemark || row.feedback || '订单未获通过。' }
   return { operator: '交易员', time, type: status, content: row.feedback || `订单状态更新为${status}。` }
 }
 function historyOperator(label) {

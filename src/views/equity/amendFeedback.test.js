@@ -29,6 +29,7 @@ test('普通、加量、减量、部成及撤回剩余量的改单只提示一�
     assert.deepEqual(state.success, ['改单提交成功'])
     assert.deepEqual(state.notifications, [])
     assert.equal(state.row.filledQuantity, filled)
+    assert.equal(state.row.status, filled ? '部撤' : '待改')
     assert.ok(state.row.feedback)
     assert.equal(state.context.tab.value, 'orders')
     assert.equal(state.context.demoOrders.value.length, (filled ? quantity + delta > filled : delta > 0) ? 2 : 1)
