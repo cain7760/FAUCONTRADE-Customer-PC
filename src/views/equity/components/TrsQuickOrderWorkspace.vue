@@ -1,7 +1,8 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { ArrowDownBold, Hide, View } from '@element-plus/icons-vue'
-import { money, number } from '../variantData'
+import { money } from '../variantData'
+import { tradingContextKey } from '../tradingContext'
 import OrderBook from './OrderBook.vue'
 import OrderTicket from './OrderTicket.vue'
 
@@ -17,11 +18,15 @@ const props = defineProps({
 
 const emit = defineEmits(['account-select', 'select', 'order'])
 const quote = ref(null)
+const { assetAmountParts, realtimeAvailable, portfolioMarketValue, portfolioFloatingPnl, floatingPnlClass } = inject(tradingContextKey)
+const assetSummaryMetrics = computed(() => [
+  { key: 'available', label: '大账户实时可用', value: realtimeAvailable.value },
+  { key: 'marketValue', label: '持仓市值', value: portfolioMarketValue.value },
+  { key: 'floatingProfit', label: '浮动盈亏', value: portfolioFloatingPnl.value, tone: floatingPnlClass.value },
+])
 const assetsVisible = ref(true)
 const assetsCollapsed = ref(false)
-const accountBalance = computed(() => props.account.id === 'TZS_T0' ? 1000000 : 700000)
 const displayAccountCash = computed(() => props.account.cash * 10000)
-const displayAccountBalance = computed(() => accountBalance.value * 10000)
 const tradingAccount = computed(() => ({ ...props.account, cash: displayAccountCash.value }))
 const defaultCounterparties = [
   { label: '线下单', value: 'offline' },
@@ -30,19 +35,6 @@ const defaultCounterparties = [
   { label: '国泰君安', value: '国泰君安' },
 ]
 const counterparties = computed(() => props.initialOrder?.counterparties || defaultCounterparties)
-
-function assetAmountParts(value) {
-  const amount = Number(value) || 0
-  const yi = Math.floor(amount / 100000000)
-  const afterYi = amount - yi * 100000000
-  const wan = Math.floor(afterYi / 10000)
-  const rest = (afterYi - wan * 10000).toFixed(2)
-  return [
-    ...(yi ? [{ value: number(yi), unit: '亿' }] : []),
-    ...(wan || yi ? [{ value: number(wan), unit: '万' }] : []),
-    { value: rest, unit: '' },
-  ]
-}
 
 function selectSymbol(code) {
   quote.value = null
@@ -62,11 +54,14 @@ watch(() => props.symbol?.code, () => { quote.value = null })
         </header>
         <OrderTicket :key="`${symbol.code}-${initialOrder?.price}-${initialOrder?.quantity}`" :instruments="instruments" :accounts="accounts" :symbol="symbol" :account="tradingAccount" :quote="quote" :paused="paused" show-framework customer-order-readonly :ticket-context="ticketContext" :initial-order="initialOrder" :counterparties="counterparties" @account-select="emit('account-select', $event)" @select="selectSymbol" @order="emit('order', $event)" />
       </section>
-      <section class="compact-assets ticket-assets" :class="{ 'is-collapsed': assetsCollapsed }" aria-label="账户资金">
+      <section class="compact-assets ticket-assets is-portfolio-summary" :class="{ 'is-collapsed': assetsCollapsed }" aria-label="资产账户概要">
         <div class="asset-summary-heading"><span>资产账户概要</span><button type="button" class="asset-visibility" :aria-label="assetsVisible ? '隐藏资金数值' : '查看资金数值'" @click="assetsVisible = !assetsVisible"><el-icon><View v-if="assetsVisible" /><Hide v-else /></el-icon></button><button type="button" class="asset-collapse" :aria-label="assetsCollapsed ? '展开资产账户概要' : '收起资产账户概要'" @click="assetsCollapsed = !assetsCollapsed"><el-icon><ArrowDownBold /></el-icon></button></div>
         <div v-show="!assetsCollapsed" class="asset-summary-grid">
-          <div class="asset-metric asset-available"><span>大账户可用</span><el-tooltip v-if="assetsVisible" placement="top" popper-class="asset-value-popper"><template #content><span class="asset-large-value"><template v-for="part in assetAmountParts(displayAccountCash)" :key="`${part.value}${part.unit}`"><b>{{ part.value }}</b><i v-if="part.unit">{{ part.unit }}</i></template></span></template><b class="asset-number">{{ money(displayAccountCash) }}</b></el-tooltip><b v-else class="asset-number">••••••••</b><small>CNY</small></div>
-          <div class="asset-metric"><span>大账户余额</span><el-tooltip v-if="assetsVisible" placement="top" popper-class="asset-value-popper"><template #content><span class="asset-large-value"><template v-for="part in assetAmountParts(displayAccountBalance)" :key="`${part.value}${part.unit}`"><b>{{ part.value }}</b><i v-if="part.unit">{{ part.unit }}</i></template></span></template><b class="asset-number">{{ money(displayAccountBalance) }}</b></el-tooltip><b v-else class="asset-number">••••••••</b><small>CNY</small></div>
+          <div v-for="metric in assetSummaryMetrics" :key="metric.key" class="asset-metric" :class="[metric.tone, { 'asset-available': metric.key === 'available' }]">
+            <span>{{ metric.label }}</span>
+            <el-tooltip v-if="assetsVisible && metric.value != null" placement="top" popper-class="asset-value-popper"><template #content><span class="asset-large-value" :class="metric.tone"><template v-for="part in assetAmountParts(metric.value)" :key="`${part.value}${part.unit}`"><b>{{ part.value }}</b><i v-if="part.unit">{{ part.unit }}</i></template></span></template><b class="asset-number" :class="metric.tone">{{ money(metric.value) }}</b></el-tooltip>
+            <b v-else class="asset-number">{{ assetsVisible ? '--' : '••••••••' }}</b><small>CNY</small>
+          </div>
         </div>
       </section>
     </section>

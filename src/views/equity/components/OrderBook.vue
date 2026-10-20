@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { money, number } from '../variantData'
-const props = defineProps({ symbol: Object, compact: Boolean, hideTicks: Boolean, hideHeader: Boolean, roomyDepth: Boolean, iaRatio: [Number, String], currency: String })
+const props = defineProps({ symbol: Object, compact: Boolean, hideTicks: Boolean, hideHeader: Boolean, iaRatio: [Number, String], currency: String })
 defineEmits(['quote', 'drag'])
 const widths = [35, 65, 41, 84, 56, 48, 72, 92, 61, 78]
 const activeView = ref('depth')
@@ -32,7 +32,7 @@ onMounted(() => { if (!props.hideTicks) tickTimer = window.setInterval(appendTic
 onBeforeUnmount(() => window.clearInterval(tickTimer))
 </script>
 <template>
-  <section class="book-pane workspace-panel" :class="{ 'book-pane--roomy-depth': roomyDepth && !compact }">
+  <section class="book-pane workspace-panel">
     <header v-if="!hideHeader" class="module-heading drag-heading" @pointerdown="$emit('drag', $event)"><span class="drag-title"><h2>订单簿</h2></span></header>
     <div class="book-scroll">
       <div class="book-quote"><strong :class="{ 'book-empty-title': !symbol.code }">{{ symbol.code ? symbol.name : '请选择下单标的' }} <span v-if="symbol.code" class="book-symbol-code">{{ symbol.code }}{{ symbol.market }}</span><em v-if="symbol.code && iaRatio !== undefined" class="book-ia-ratio">IA {{ iaRatio }}%</em><em v-if="symbol.code && currency" class="book-currency">{{ currency }}</em></strong><div v-if="symbol.code" :class="symbol.change >= 0 ? 'up' : 'down'"><b>{{ money(symbol.price) }}</b><span>{{ symbol.change >= 0 ? '↑' : '↓' }} {{ priceDelta(symbol) }} {{ Math.abs(symbol.change).toFixed(2) }}%</span></div><div v-else class="book-empty-quote"><b>--</b><span>--</span></div></div>
@@ -45,15 +45,3 @@ onBeforeUnmount(() => window.clearInterval(tickTimer))
     </div>
   </section>
 </template>
-
-<style scoped>
-.book-pane--roomy-depth .book-subtitle b,
-.book-pane--roomy-depth .depth-switch button,
-.book-pane--roomy-depth .book-column-head,
-.book-pane--roomy-depth .double-depth button,
-.book-pane--roomy-depth .double-depth .rank,
-.book-pane--roomy-depth .book-hint { font-size: 12px; }
-.book-pane--roomy-depth .double-depth + .double-depth { margin-top: 6px; }
-.book-pane--roomy-depth .double-depth button { height: 32px; }
-.book-pane--roomy-depth .double-depth button i { height: 32px; }
-</style>

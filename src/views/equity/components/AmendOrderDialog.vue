@@ -165,7 +165,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
       <section class="amend-order-overview" aria-label="原订单信息">
         <header class="amend-order-overview-heading"><div class="amend-order-overview-title"><h3>原订单信息</h3><span class="execution-type-tag" :class="order.executionType === 'highTouch' ? 'is-high-touch' : 'is-low-touch'">{{ order.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></div><span>原订单编号：<b :title="order.orderNo">{{ order.orderNo }}</b></span></header>
         <dl>
-          <div><dt>开平/方向</dt><dd class="amend-order-tags"><span class="amend-order-tag">{{ order.openClose === '开' ? '开仓' : order.openClose === '平' ? '平仓' : '--' }}</span><span class="amend-order-tag" :class="{ 'is-buy': order.side === 'buy', 'is-sell': order.side === 'sell' }">{{ order.side === 'buy' ? '买入' : order.side === 'sell' ? '卖出' : '--' }}</span></dd></div>
+          <div><dt>开平/方向</dt><dd class="amend-order-tags"><span class="amend-order-tag">{{ order.openClose === '开' ? '开仓' : order.openClose === '平' ? '平仓' : '--' }}</span><span class="amend-order-tag" :class="{ 'is-buy': order.side === 'buy', 'is-sell': order.side === 'sell' }">{{ order.side === 'buy' ? '买' : order.side === 'sell' ? '卖' : '--' }}</span></dd></div>
           <div><dt>订单价格</dt><dd>{{ originalPrice === null ? '市价' : formatPrice(originalPrice, order.market) }}</dd></div>
           <div><dt>订单数量</dt><dd>{{ number(originalQuantity) }}</dd></div>
           <div><dt>已成数量</dt><dd>{{ number(filledQuantity) }}</dd></div>

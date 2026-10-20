@@ -18,7 +18,8 @@ const recordTime = computed(() => props.record?.orderTime || `${props.record?.po
 const directionLabel = computed(() => props.record?.side === 'sell' ? '卖出' : '买入')
 const openCloseLabel = computed(() => props.record?.openClose === '平' ? '平仓' : '开仓')
 const orderPrice = computed(() => props.record?.price === null || props.record?.price === undefined ? '市价' : formatPrice(props.record.price, props.record.market))
-const orderQuantity = computed(() => props.record?.inputAmount !== null && props.record?.inputAmount !== undefined ? `${money(props.record.inputAmount)} CNY` : `${number(props.record?.quantity || 0)} 股`)
+const isAmountOrder = computed(() => props.record?.inputAmount !== null && props.record?.inputAmount !== undefined)
+const orderValue = computed(() => isAmountOrder.value ? `${money(props.record.inputAmount)} CNY` : `${number(props.record?.quantity || 0)} 股`)
 
 function offsetTime(time, seconds) {
   const date = new Date(String(time).replace(' ', 'T'))
@@ -28,20 +29,12 @@ function offsetTime(time, seconds) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 function statusRecord(row, time) {
-  const rules = {
-    '已撤': ['当前账户', '撤单', '撤单申请已提交。'],
-    '暂停': ['交易员', '暂停', '订单已暂停，等待恢复处理。'],
-    '完成': ['交易所', '完成', `订单已全部成交，成交数量 ${number(row.filledQuantity || row.quantity)} 股。`],
-    '部成': ['交易所', '部分成交', `订单已部分成交，成交数量 ${number(row.filledQuantity || 0)} 股。`],
-    '已报': ['交易员', '已报', '订单已报送至交易所。'],
-    '待报': ['交易员', '待报', '订单等待报送。'],
-    '改单中': ['当前账户', '改单', '订单修改已受理，等待处理完成。'],
-    '异常': ['交易员', '异常', row.feedback || '订单处理异常，请关注后续处理结果。'],
-    '拒绝': ['交易员', '拒绝', row.traderRemark || '交易员已拒绝该手工单。'],
-    '其他': ['交易员', '状态更新', '订单状态已更新。'],
-  }
-  const [operator, type, content] = rules[row.status] || rules.其他
-  return { operator, time, type, content }
+  const status = row.status || '待确认'
+  if (status === '全成') return { operator: '交易所', time, type: status, content: `订单已全部成交，成交数量 ${number(row.filledQuantity || row.quantity)} 股。` }
+  if (status === '部成') return { operator: '交易所', time, type: status, content: `订单已部分成交，成交数量 ${number(row.filledQuantity || 0)} 股。` }
+  if (status === '部撒' || status === '撤单') return { operator: '当前账户', time, type: status, content: row.feedback || '订单撤单结果已确认。' }
+  if (status === '被拒绝' || status === '审核拒绝') return { operator: '交易员', time, type: status, content: row.traderRemark || row.feedback || '订单未获通过。' }
+  return { operator: '交易员', time, type: status, content: row.feedback || `订单状态更新为${status}。` }
 }
 function historyOperator(label) {
   if (String(label).includes('客户')) return '客户'
@@ -56,14 +49,14 @@ const records = computed(() => {
       .map(item => ({ operator: historyOperator(item.label), time: item.at || recordTime.value, type: item.label || '状态更新', content: item.detail || '订单状态已更新。' }))
       .sort((a, b) => b.time.localeCompare(a.time))
   }
-  const entries = [{ operator: '当前账户', time: recordTime.value, type: '下单', content: `提交${directionLabel.value}${openCloseLabel.value}${row.type === 'market' ? '市价' : '限价'}订单：${orderQuantity.value}。` }]
+  const entries = [{ operator: '当前账户', time: recordTime.value, type: '下单', content: `提交${directionLabel.value}${openCloseLabel.value}${row.type === 'market' ? '市价' : '限价'}订单：${orderValue.value}。` }]
   let offset = 45
   if (row.orderType === '手工单') {
     entries.push({ operator: '交易员', time: offsetTime(recordTime.value, offset), type: '受理', content: '已接收手工单，等待交易员处理。' })
     offset += 45
   }
   entries.push(statusRecord(row, offsetTime(recordTime.value, offset)))
-  if (row.convertedToManualAt) entries.push({ operator: '当前账户', time: row.convertedToManualAt, type: '转手工单', content: row.orderRemark ? `已转为手工单；下单备注：${row.orderRemark}` : '异常系统单已转为手工单，等待交易员处理。' })
+  if (row.convertedToManualAt) entries.push({ operator: '当前账户', time: row.convertedToManualAt, type: '转手工单', content: row.orderRemark ? `已转为手工单；下单备注：${row.orderRemark}` : '被拒绝系统单已转为手工单，等待交易员处理。' })
   return entries.sort((a, b) => b.time.localeCompare(a.time))
 })
 const pagedRecords = computed(() => records.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
@@ -89,7 +82,7 @@ function exportHistory() {
       <section class="history-layout">
       <section class="history-order-summary">
         <div class="history-instrument"><strong>{{ record.name }}</strong><span>（{{ record.code }}.{{ record.market }}）</span><b :class="record.side === 'sell' ? 'is-sell' : 'is-buy'">{{ directionLabel }} · {{ openCloseLabel }}</b></div>
-        <dl class="history-order-metrics"><div><dt>下单账户</dt><dd>{{ record.account }}</dd></div><div><dt>订单类型</dt><dd>{{ record.orderType || '--' }}</dd></div><div><dt>执行算法</dt><dd>{{ record.algorithm || '--' }}</dd></div><div><dt>订单价格</dt><dd>{{ orderPrice }}</dd></div><div><dt>订单数量</dt><dd>{{ orderQuantity }}</dd></div><div><dt>币种</dt><dd>CNY</dd></div></dl>
+        <dl class="history-order-metrics"><div><dt>下单账户</dt><dd>{{ record.account }}</dd></div><div><dt>订单类型</dt><dd>{{ record.orderType || '--' }}</dd></div><div><dt>执行算法</dt><dd>{{ record.algorithm || '--' }}</dd></div><div><dt>订单价格</dt><dd>{{ orderPrice }}</dd></div><div><dt>{{ isAmountOrder ? '订单金额' : '订单数量' }}</dt><dd>{{ orderValue }}</dd></div><div><dt>币种</dt><dd>CNY</dd></div></dl>
         <div class="history-summary-actions"><button type="button" class="history-refresh" aria-label="刷新历史记录" @click="refreshHistory"><el-icon><Refresh /></el-icon></button><button type="button" class="history-export" @click="exportHistory">导出历史</button></div>
       </section>
       <section class="history-records">

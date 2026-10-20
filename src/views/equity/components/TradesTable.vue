@@ -12,7 +12,7 @@ const { tradeFilters, tradeSortState, tradeVisibleColumnKeys, tradeColumnOptions
 <template>
           <div class="order-filters">
             <el-input v-model="tradeFilters.symbol" :prefix-icon="Search" placeholder="标的名称 / 代码" aria-label="搜索成交标的" clearable />
-            <el-select v-model="tradeFilters.side" aria-label="买卖方向筛选" popper-class="variant-popper" :offset="2"><el-option label="买卖方向" value="ALL"/><el-option label="买入" value="buy"/><el-option label="卖出" value="sell"/></el-select>
+            <el-select v-model="tradeFilters.side" aria-label="买卖方向筛选" popper-class="variant-popper" :offset="2"><el-option label="买卖方向" value="ALL"/><el-option label="买" value="buy"/><el-option label="卖" value="sell"/></el-select>
             <el-select v-model="tradeFilters.openClose" aria-label="开平类型筛选" popper-class="variant-popper" :offset="2"><el-option label="开平类型" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select>
             <el-select v-model="tradeFilters.orderType" aria-label="订单类型筛选" popper-class="variant-popper" :offset="2"><el-option label="订单类型" value="ALL"/><el-option label="系统单" value="系统单"/><el-option label="手工单" value="手工单"/></el-select>
             <el-button class="filter-query" @click="applyTradeFilters">查询</el-button><el-button link @click="clearTradeFilters">重置</el-button>
@@ -21,7 +21,7 @@ const { tradeFilters, tradeSortState, tradeVisibleColumnKeys, tradeColumnOptions
           <TradingTable :key="`trades-${tableRefreshKey}`" class="original-fields orders-table trades-table" :data="sortedTrades" height="100%" :fit="false" empty-text="暂无成交记录" :cell-class-name="copyableIdentifierCellClass" @cell-dblclick="handleTableCellDoubleClick">
             <el-table-column type="index" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
             <template v-for="columnKey in tradeVisibleColumnKeys" :key="columnKey">
-              <el-table-column v-if="columnKey === 'side'" prop="side" label="方向" width="64" align="left" header-align="left"><template #default="{row}"><span :class="row.side === 'buy' ? 'up' : 'down'">{{ row.side === 'buy' ? '买入' : '卖出' }}</span></template></el-table-column>
+              <el-table-column v-if="columnKey === 'side'" prop="side" label="方向" width="64" align="left" header-align="left"><template #default="{row}"><span :class="row.side === 'buy' ? 'up' : 'down'">{{ row.side === 'buy' ? '买' : '卖' }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'openClose'" prop="openClose" label="开平方向" width="64" align="left" header-align="left"><template #default="{row}">{{ row.openClose === '开' ? '开仓' : '平仓' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'code'" prop="code" label="证券代码" width="68" />
               <el-table-column v-else-if="columnKey === 'name'" prop="name" label="证券名称" width="68" />
