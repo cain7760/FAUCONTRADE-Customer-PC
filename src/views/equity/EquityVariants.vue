@@ -109,7 +109,7 @@ function selectProductNav(label) {
   activeNav.value = label
 }
 const allAccountsValue = '__ALL_ACCOUNTS__'
-const workspace = ref(null), accountId = ref('TZS_T0'), selectedAccountIds = ref(['TZS_T0']), previousAccountSelection = ref(['TZS_T0']), query = ref(''), market = ref('ALL'), positionType = ref('ALL')
+const workspace = ref(null), accountId = ref('TZS_T0'), selectedAccountIds = ref(['TZS_T0']), previousAccountSelection = ref(['TZS_T0']), query = ref(''), positionType = ref('ALL')
 const globalAccountSearch = ref('')
 const assetsVisible = ref(true), assetsCollapsed = ref(false)
 const tab = ref('positions'), selectedCode = ref('000001'), table = ref(null), quote = ref(null), ticketResetKey = ref(0)
@@ -192,7 +192,7 @@ watch(orderFilterBar, bar => {
   }
 }, { flush: 'post' })
 onBeforeUnmount(() => orderFilterObserver?.disconnect())
-const appliedPositionFilters = ref({ query: '', market: 'ALL', positionType: 'ALL' })
+const appliedPositionFilters = ref({ query: '', positionType: 'ALL' })
 const appliedOrderFilters = ref({ orderNo: '', symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL', status: [] })
 const tradeFilters = ref({ symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL' })
 const appliedTradeFilters = ref({ symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL' })
@@ -260,7 +260,7 @@ const portfolioMarketValue = computed(() => allRows.value.reduce((total, row) =>
 const portfolioFloatingPnl = computed(() => allRows.value.reduce((total, row) => total + (Number(row.floatingProfit) || 0) * cnyExchangeRate(row.currency), 0))
 const realtimeAvailable = computed(() => effectiveAccountIds.value.reduce((total, id) => total + (mockRealtimeAvailableByAccount[id] ?? accounts.find(account => account.id === id)?.cash ?? 0), 0))
 const floatingPnlClass = computed(() => portfolioFloatingPnl.value > 0 ? 'is-positive' : portfolioFloatingPnl.value < 0 ? 'is-negative' : '')
-const filtered = computed(() => allRows.value.filter(p => (!appliedPositionFilters.value.query || `${p.code}${p.name}`.includes(appliedPositionFilters.value.query.trim())) && (appliedPositionFilters.value.market === 'ALL' || p.market === appliedPositionFilters.value.market) && (appliedPositionFilters.value.positionType === 'ALL' || p.direction === appliedPositionFilters.value.positionType)))
+const filtered = computed(() => allRows.value.filter(p => (!appliedPositionFilters.value.query || `${p.code}${p.name}`.includes(appliedPositionFilters.value.query.trim())) && (appliedPositionFilters.value.positionType === 'ALL' || p.direction === appliedPositionFilters.value.positionType)))
 const sortedRows = computed(() => {
   const { prop, direction } = sortState.value
   if (!prop || !direction) return filtered.value
@@ -539,12 +539,12 @@ function triggerDemoTransactionToast() {
   publishTransactionMessage({ name: '平安银行', code: '000001', status: '买入订单全部成交', quantity: 900, price: 11.78, title: '订单已全部成交' })
 }
 function toggleAssetsVisible() { assetsVisible.value = !assetsVisible.value; if (assetsCollapsed.value) assetsCollapsed.value = false }
-function applyFilters() { appliedPositionFilters.value = { query: query.value, market: market.value, positionType: positionType.value }; table.value?.setScrollTop?.(0) }
+function applyFilters() { appliedPositionFilters.value = { query: query.value, positionType: positionType.value }; table.value?.setScrollTop?.(0) }
 function applyOrderFilters() { appliedOrderFilters.value = { ...orderFilters.value, status: [...orderFilters.value.status] }; orderSortState.value = { prop: null, direction: null } }
 function clearOrderFilters() { orderFilters.value = { orderNo: '', symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL', status: [] }; applyOrderFilters() }
 function applyTradeFilters() { appliedTradeFilters.value = { ...tradeFilters.value }; tradeSortState.value = { prop: null, direction: null } }
 function clearTradeFilters() { tradeFilters.value = { symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL' }; applyTradeFilters() }
-function clearFilters() { query.value = ''; market.value = 'ALL'; positionType.value = 'ALL'; sortState.value = { prop: null, direction: null }; table.value?.clearFilter(); applyFilters() }
+function clearFilters() { query.value = ''; positionType.value = 'ALL'; sortState.value = { prop: null, direction: null }; table.value?.clearFilter(); applyFilters() }
 function downloadCsv(filename, header, records) {
   const csv = [header, ...records].map(record => record.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n')
   const link = document.createElement('a')
@@ -857,16 +857,8 @@ function acceptAmendOrder(amendment) {
         feedback: `关联原订单 ${row.orderNo} 的未成交部分`, parentOrderNo: row.orderNo,
       })
       demoOrders.value.unshift(replacementOrder)
-      publishOrderActivityMessage(replacementOrder)
     }
-    publishOrderActivityMessage(row)
-    publishTransactionMessage({
-      name: row.name, code: row.code, status: '改单申请已提交', quantity: replacementQuantity,
-      quantityLabel: '未成交订单数量', price: nextPrice, priceLabel: '订单价格', title: '改单申请已提交',
-      content: replacementOrderNo
-        ? `${row.name}（${row.code}）已成交部分保持不变，未成交部分由订单 ${replacementOrderNo} 承接。`
-        : `${row.name}（${row.code}）未成交部分已撤，已成交部分保持不变。`,
-    })
+    ElMessage.success('改单提交成功')
     tab.value = 'orders'
     return
   }
@@ -910,13 +902,7 @@ function acceptAmendOrder(amendment) {
   } else {
     row.feedback = '改单已受理：订单参数已更新'
   }
-  publishOrderActivityMessage(row)
-  publishTransactionMessage({
-    name: row.name, code: row.code, status: `${amendment.operation}申请已提交`, quantity: Math.abs(delta) || amendment.quantity,
-    quantityLabel: amendment.operation === '追单' ? '追单数量' : amendment.operation === '部撤' ? '部撤数量' : '订单数量',
-    price: nextPrice, priceLabel: '订单价格', title: '改单申请已提交',
-    content: `${row.name}（${row.code}）改单申请已提交：${amendment.operation}${delta ? ` ${number(Math.abs(delta))} 股` : '订单参数调整'}。`,
-  })
+  ElMessage.success('改单提交成功')
   tab.value = 'orders'
 }
 function publishOrderOperationMessage(row, operation, success) {
@@ -980,7 +966,7 @@ provide(tradingContextKey, {
   clearOrderFilters, clearTradeFilters, closePositionVisible, closingAccount, closingPosition, collapsed, columnOptions, confirmCancelOrder, confirmConvertToManual,
   confirmExport, conversionRemark, convertManualVisible, convertingManualOrder, copyableIdentifierCellClass, currencyForRow, dismissTransactionToast, dock, dragging,
   fillProgress, filledAmount, filtered, filteredGlobalAccounts, floatStyle, floating, floatingPnlClass, globalAccountSearch, handleGlobalAccountVisible,
-  handlePositionRowDoubleClick, handleTableCellDoubleClick, historyRecord, historyVisible, instruments, invertOrderStatuses, isTicketLayoutModified, market, marketLabel,
+  handlePositionRowDoubleClick, handleTableCellDoubleClick, historyRecord, historyVisible, instruments, invertOrderStatuses, isTicketLayoutModified, marketLabel,
   messageIcon, openAmendOrder, openCancelOrder, openChaseOrder, openClosePosition, openConvertToManual, openOrderChase, openOrderHistory, openTrsOrderTicket,
   openTrsPoolExport, orderActionLabel, orderActivity, orderActivityHint, orderColumnDefaults, orderColumnOptions, orderFilterBar, orderFilters, orderRowClassName,
   orderSortState, orderStatusOptions, orderStatusVisual, orderValueLabel, orderVisibleColumnKeys, orders, portfolioFloatingPnl, portfolioMarketValue, positionColumnDefaults,
