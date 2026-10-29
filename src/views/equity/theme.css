@@ -3,3 +3,10 @@
 @media(min-width:1700px){.trading-grid{grid-template-columns:minmax(620px,1fr) 310px 360px}.ticket-body{padding:18px 22px}.depth-row{height:33px}.summary-strip{padding:20px 8px}}
 @media(max-width:1200px){.summary-note{display:none!important}.account-scope{display:none}.trading-grid{grid-template-columns:minmax(380px,1fr) 222px 280px;gap:6px;padding:0 8px}.product-nav{gap:20px}.app-header{gap:20px}.header-right{gap:12px}.summary-strip>div{padding:0 14px}.summary-strip strong{font-size:19px}.table-tools{gap:8px}.table-tools>.muted{display:none}.quote-hero h3{font-size:17px}.context-bar{padding:10px 14px}.ticket-body{padding:12px}.session-state{font-size:10px}}
 @media(max-width:950px){.trading-grid{grid-template-columns:minmax(380px,1fr) 300px;overflow:auto}.market-panel{grid-column:1;grid-row:2;max-height:480px}.ticket{grid-column:2;grid-row:1 / span 2;position:sticky;top:0;max-height:100%}.portfolio{min-height:430px}.header-right>.draft-badge{display:none}.session-state{display:none}.summary-strip strong{font-size:16px}.product-nav>span:not(.active){display:none}}
+.el-tag.el-tag--info {
+  /* 中性标签属于公共深色主题，不依赖页面层级或筛选控件排列。 */
+  --el-tag-bg-color: #303840;
+  --el-tag-border-color: #53606d;
+  --el-tag-text-color: #d9e3ec;
+  --el-tag-hover-color: #53606d;
+}

@@ -1,5 +1,6 @@
 <script setup>
-import TradingTable from './TradingTable.vue'
+import { withoutShareUnit } from '../../../utils/tableQuantity.js'
+import TradingTable from '../../../components/trading/TradingTable.vue'
 
 const { orders, status, riskTagMeta, underlyingCode } = defineProps({
   orders: Array,
@@ -23,7 +24,7 @@ const emit = defineEmits(['selection-change', 'claim', 'reject', 'detail'])
         <el-table-column label="方向" width="52" align="center"><template #default="{ row }"><span :class="row.direction === '买入' ? 'is-buy' : 'is-sell'">{{ row.direction }}</span></template></el-table-column>
         <el-table-column prop="attribute" label="订单属性" width="64" align="center" />
         <el-table-column prop="price" label="订单价格" width="78" align="right" />
-        <el-table-column prop="quantity" label="下单数量" width="70" align="right" />
+        <el-table-column prop="quantity" label="下单数量" width="70" align="right"><template #default="{ row }">{{ withoutShareUnit(row.quantity) }}</template></el-table-column>
         <el-table-column prop="amount" label="下单金额" width="126" align="right" />
         <el-table-column prop="submittedAt" label="提交时间" width="176" />
         <el-table-column prop="remark" label="备注" width="152" show-overflow-tooltip />

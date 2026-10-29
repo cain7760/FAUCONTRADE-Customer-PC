@@ -1,6 +1,7 @@
 <script setup>
-import TradingTable from './TradingTable.vue'
-import ColumnConfigPopover from './ColumnConfigPopover.vue'
+import { withoutShareUnit } from '../../../utils/tableQuantity.js'
+import TradingTable from '../../../components/trading/TradingTable.vue'
+import ColumnConfigPopover from '../../../components/trading/ColumnConfigPopover.vue'
 
 const { pagedDoneOrders, doneColumnOptions, doneColumnDefaults, doneStatusLabel, doneOrderInputValue, doneOrderOutputValue, doneSystemOrderValue, doneSystemOrderPrice, doneSystemOrderInputValue, doneSystemOrderDealAmount, doneSystemOrderDealQuantity, doneSystemOrderStatus, doneDealNo, doneDealPrice, doneDealQuantity } = defineProps({
   pagedDoneOrders: Array,
@@ -41,7 +42,7 @@ const emit = defineEmits(['selection-change', 'history', 'send-email', 'deal-upd
             <el-table-column prop="attribute" label="订单属性" width="76" align="center" />
             <el-table-column prop="price" label="订单价格" width="88" align="right" />
             <el-table-column label="订单数量/金额" width="114" align="right"><template #default="{ row }">{{ doneOrderInputValue(row) }}</template></el-table-column>
-            <el-table-column label="下单金额/预估数量" width="132" align="right"><template #default="{ row }">{{ doneOrderOutputValue(row) }}</template></el-table-column>
+            <el-table-column label="下单金额/预估数量" width="132" align="right"><template #default="{ row }">{{ withoutShareUnit(doneOrderOutputValue(row)) }}</template></el-table-column>
             <el-table-column prop="submittedAt" label="提交时间" width="154" />
             <el-table-column prop="remark" label="备注" width="180" show-overflow-tooltip />
           </el-table-column>
@@ -53,14 +54,14 @@ const emit = defineEmits(['selection-change', 'history', 'send-email', 'deal-upd
             <el-table-column label="订单价格" width="88" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderPrice) }}</template></el-table-column>
             <el-table-column label="订单数量/金额" width="114" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderInputValue, '/') }}</template></el-table-column>
             <el-table-column label="成交金额" width="132" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderDealAmount) }}</template></el-table-column>
-            <el-table-column label="成交数量" width="110" align="right"><template #default="{ row }">{{ doneSystemOrderValue(row, doneSystemOrderDealQuantity) }}</template></el-table-column>
+            <el-table-column label="成交数量" width="110" align="right"><template #default="{ row }">{{ withoutShareUnit(doneSystemOrderValue(row, doneSystemOrderDealQuantity)) }}</template></el-table-column>
             <el-table-column label="方向" width="60" align="center"><template #default="{ row }">{{ doneSystemOrderValue(row, line => line.side === 'sell' ? '卖出' : '买入') }}</template></el-table-column>
             <el-table-column label="订单状态" width="88" align="center"><template #default="{ row }">{{ doneSystemOrderStatus(row) }}</template></el-table-column>
           </el-table-column>
           <el-table-column v-else-if="columnKey === 'dealInfo'" label="成交信息">
             <el-table-column label="成交编号" width="148" show-overflow-tooltip><template #default="{ row }">{{ doneDealNo(row) }}</template></el-table-column>
             <el-table-column label="成交价格" width="102" align="right"><template #default="{ row }">{{ doneDealPrice(row) }}</template></el-table-column>
-            <el-table-column label="成交数量" width="116" align="right"><template #default="{ row }">{{ doneDealQuantity(row) }}</template></el-table-column>
+            <el-table-column label="成交数量" width="116" align="right"><template #default="{ row }">{{ withoutShareUnit(doneDealQuantity(row)) }}</template></el-table-column>
           </el-table-column>
         </template>
         <el-table-column prop="orderNo" label="订单编号" width="154" />

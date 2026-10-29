@@ -53,13 +53,14 @@ test('异常专用行高亮和图标不再套用拒单状态', () => {
   assert.notEqual(visual('异常').path, visual('拒单').path)
 })
 
-test('补充异常不放开交易操作，拒单系统单仍可转手工', () => {
+test('仅异常系统单可转手工，拒单不可转，异常不可改撤', () => {
   const context = { systemRunning: { value: true }, cancelableQuantity: evaluate('cancelableQuantity') }
   const canOperate = evaluate('canOperateOrder', context), canConvert = evaluate('canConvertToManual', context)
   const row = { quantity: 1000, filledQuantity: 0, orderType: '系统单' }
   assert.equal(canOperate({ ...row, status: '异常' }), false)
-  assert.equal(canConvert({ ...row, status: '异常' }), false)
+  assert.equal(canConvert({ ...row, status: '异常' }), true)
+  assert.equal(canConvert({ ...row, status: '异常', orderType: '手工单' }), false)
   assert.equal(canOperate({ ...row, status: '拒单' }), false)
-  assert.equal(canConvert({ ...row, status: '拒单' }), true)
+  assert.equal(canConvert({ ...row, status: '拒单' }), false)
   assert.equal(canOperate({ ...row, status: '已报' }), true)
 })

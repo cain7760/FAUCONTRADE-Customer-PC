@@ -1,5 +1,5 @@
 <script setup>
-import TradingTable from './TradingTable.vue'
+import TradingTable from '../../../components/trading/TradingTable.vue'
 
 const { records } = defineProps({ records: Array })
 </script>

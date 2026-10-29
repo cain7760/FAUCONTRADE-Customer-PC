@@ -859,7 +859,7 @@
 .trs-quick-order-workspace .trade-dock {
   display: grid;
   grid-template-columns: 294px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) 142px;
+  grid-template-rows: minmax(0, 1fr) 116px;
   grid-template-areas: 'book ticket' 'book assets';
   column-gap: 1px;
   row-gap: 0;

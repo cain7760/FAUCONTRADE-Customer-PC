@@ -5,7 +5,7 @@ import { ArrowDownBold, Bell, Briefcase, CaretBottom, ChatDotRound, Clock, Colle
 import ClientLineIcon from '../../ClientLineIcon.vue'
 import SettingsMenuIcon from '../../SettingsMenuIcon.vue'
 import { accounts } from './fixtures'
-import { marketInstruments, variantRows, variants, money, number, price as formatPrice } from './variantData'
+import { marketInstruments, variantRows, variants, money, signedMoney, number, price as formatPrice } from './variantData'
 import { columnOptionsFor } from './tableFieldDefinitions'
 import { orderTypeError } from './orderMarketRules.js'
 import { positionMarginInCny } from './positionCurrency'
@@ -19,7 +19,9 @@ import EquityTradingPage from './pages/EquityTradingPage.vue'
 import OptionsTradingPage from './pages/OptionsTradingPage.vue'
 import FinancingPage from './pages/FinancingPage.vue'
 import StrategyTradingPage from './pages/StrategyTradingPage.vue'
-import DataPage from './pages/DataPage.vue'
+import DataPage from '../data/DataPage.vue'
+import { useOrderSessionExpiry } from '../../composables/useOrderSessionExpiry.js'
+import { marketClock } from '../../domain/orders/marketSession.js'
 
 const initialVariant = new URLSearchParams(location.search).get('layout')
 const assetUrl = name => `${import.meta.env.BASE_URL}original-icons/${name}`
@@ -53,6 +55,7 @@ const autoLaunch = ref(false)
 const emergencyMessage = ref(null)
 const systemRunning = ref(true)
 const transactionToasts = ref([])
+const visibleTransactionToasts = computed(() => transactionToasts.value.slice(-3).reverse())
 const transactionToastTimers = new Map()
 const headerNotice = computed(() => systemRunning.value ? null : {
   id: 'system-interrupted', text: '交易系统当前中断，下单服务暂不可用；已提交订单请以订单状态为准。',
@@ -89,7 +92,7 @@ const mainNav = [
 const availableNav = computed(() => mainNav.filter(item => !item.hidden))
 const overflowNav = computed(() => viewportWidth.value <= 980 ? availableNav.value.slice(3) : viewportWidth.value <= 1200 ? availableNav.value.slice(4) : [])
 const visibleNav = computed(() => availableNav.value.slice(0, availableNav.value.length - overflowNav.value.length))
-const isUnderDevelopment = computed(() => ['期权交易', '融资申请', '数据'].includes(activeNav.value))
+const isUnderDevelopment = computed(() => ['期权交易', '融资申请'].includes(activeNav.value))
 const traderPrimaryMenu = [
   { key: 'swap', label: 'TRS', title: '收益互换', icon: Connection, children: [{ label: '订单管理', icon: Document }, { label: '我的HT订单', icon: Collection }] },
   { key: 'options', label: '期权', title: '期权交易', icon: List, children: [{ label: '期权交易', icon: Tickets }, { label: '持仓管理', icon: Briefcase }, { label: '生命周期', icon: Clock }] },
@@ -130,6 +133,7 @@ const orderStatusOptions = orderStatusMachine.map((status, index) => ({ key: ind
 const copyableIdentifierFields = new Set(['orderNo', 'tradeNo', 'entrustNo'])
 const demoOrderStatuses = ['撤单', '待撤', '全成', '部成', '已报', '部成', '待改', '拒单', '拒单', '未报', '待报', '待报', '待改', '全成', '待报', '待报', '异常']
 const amountOrderIndices = new Set([2, 3, 6, 11])
+const demoOrderDate = marketClock().date
 const orderActivityHint = '原为反馈信息，仅显示系统反馈；10 月 13 日起，订单动态合并展示系统反馈和交易员备注。'
 const demoOrders = ref(demoOrderStatuses.map((status, index) => {
   const instrument = variantRows[index % variantRows.length]
@@ -154,10 +158,11 @@ const demoOrders = ref(demoOrderStatuses.map((status, index) => {
     canceledQuantity: status === '撤单' ? quantity - filledQuantity : 0,
     frozenMargin: ['撤单', '全成', '拒单'].includes(status) ? 0 : estimate * .4,
     marginRate: 40, feedback: status === '拒单' ? '订单已被拒绝' : status.includes('部成') ? '部分成交回报已确认，剩余数量继续挂单' : status === '全成' ? '成交回报已确认' : '',
-    market: instrument.market, orderTime: `2026-09-11 09:${String(30 + index).padStart(2, '0')}:00`,
+    market: instrument.market, orderTime: `${demoOrderDate} 09:${String(30 + index).padStart(2, '0')}:00`,
   }
 }))
 const syncedHtPositions = ref([])
+const syncOrderClose = useOrderSessionExpiry(demoOrders)
 const orderFilters = ref({ orderNo: '', symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL', status: [] })
 const orderFilterBar = ref(null)
 const visibleOrderFilterCount = ref(5)
@@ -170,12 +175,18 @@ function fitOrderFilters() {
   const available = bar.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
   const optional = [...bar.querySelectorAll(':scope > .order-filter-optional')]
   const widths = optional.map(el => parseFloat(getComputedStyle(el).width))
-  const fixed = [...bar.children].filter(el => el.matches('.order-symbol-filter, .filter-query, .el-button.is-link, .table-toolbar-actions'))
-  const fixedWidth = fixed.reduce((sum, el) => sum + el.getBoundingClientRect().width, 0)
-  const moreWidth = parseFloat(getComputedStyle(bar.querySelector('.order-filter-more')).width)
+  const fixed = [...bar.children].filter(el => el.matches('.order-symbol-filter, .order-filter-required, .filter-query, .el-button.is-link, .table-toolbar-actions'))
+  const fixedWidth = fixed.reduce((sum, el) => {
+    const style = getComputedStyle(el)
+    // 工具栏的 auto 左边距是剩余空间，不能计入固定控件占用。
+    const margins = el.matches('.table-toolbar-actions') ? 0 : (parseFloat(style.marginLeft) || 0) + (parseFloat(style.marginRight) || 0)
+    return sum + el.getBoundingClientRect().width + margins
+  }, 0)
+  const more = bar.querySelector('.order-filter-more')
+  const moreWidth = parseFloat(getComputedStyle(more).width)
   let count = widths.length
   while (count > 0) {
-    const hasMore = count < widths.length
+    const hasMore = count < widths.length || more.classList.contains('order-filter-more-required')
     const total = fixedWidth + widths.slice(0, count).reduce((sum, width) => sum + width, 0)
       + (hasMore ? moreWidth : 0) + gap * (fixed.length + count + Number(hasMore) - 1)
     if (total <= available) break
@@ -272,7 +283,7 @@ const sortedRows = computed(() => {
     return (left - right) * multiplier
   })
 })
-const orders = computed(() => demoOrders.value.filter(o => effectiveAccountIds.value.includes(o.account) && (!appliedOrderFilters.value.orderNo || o.orderNo.includes(appliedOrderFilters.value.orderNo.trim())) && (!appliedOrderFilters.value.symbol || `${o.code}${o.name}`.includes(appliedOrderFilters.value.symbol.trim())) && (appliedOrderFilters.value.side === 'ALL' || o.side === appliedOrderFilters.value.side) && (appliedOrderFilters.value.openClose === 'ALL' || o.openClose === appliedOrderFilters.value.openClose) && (appliedOrderFilters.value.orderType === 'ALL' || o.orderType === appliedOrderFilters.value.orderType) && (!appliedOrderFilters.value.status.length || appliedOrderFilters.value.status.includes(o.status))))
+const orders = computed(() => demoOrders.value.filter(o => effectiveAccountIds.value.includes(o.account) && (!appliedOrderFilters.value.orderNo || o.orderNo.includes(appliedOrderFilters.value.orderNo.trim())) && (!appliedOrderFilters.value.symbol || `${o.code}${o.name}`.includes(appliedOrderFilters.value.symbol.trim())) && (appliedOrderFilters.value.side === 'ALL' || o.side === appliedOrderFilters.value.side) && (appliedOrderFilters.value.openClose === 'ALL' || o.openClose === appliedOrderFilters.value.openClose) && (!appliedOrderFilters.value.status.length || appliedOrderFilters.value.status.includes(o.status))))
 const sortedOrders = computed(() => {
   const { prop, direction } = orderSortState.value
   const exceptionRank = row => row.status === '异常' ? 0 : 1
@@ -281,7 +292,7 @@ const sortedOrders = computed(() => {
   const multiplier = direction === 'ascending' ? 1 : -1
   return [...orders.value].sort((a, b) => exceptionFirst(a, b) || (orderSortValue(a, prop) - orderSortValue(b, prop)) * multiplier)
 })
-const trades = computed(() => demoOrders.value
+const allTradeRows = computed(() => demoOrders.value
   .map((order, index) => ({
     ...order,
     id: `${order.id}-trade`,
@@ -291,12 +302,14 @@ const trades = computed(() => demoOrders.value
     entrustNo: `${order.orderNo}-01`,
     tradeDate: order.orderTime.slice(0, 10).replaceAll('-', ''),
   }))
-  .filter(trade => effectiveAccountIds.value.includes(trade.account)
+  .filter(trade => trade.filledQuantity > 0 && trade.filledPrice !== null))
+const trades = computed(() => allTradeRows.value.filter(trade => effectiveAccountIds.value.includes(trade.account)
     && trade.filledQuantity > 0 && trade.filledPrice !== null
     && (!appliedTradeFilters.value.symbol || `${trade.code}${trade.name}`.includes(appliedTradeFilters.value.symbol.trim()))
     && (appliedTradeFilters.value.side === 'ALL' || trade.side === appliedTradeFilters.value.side)
     && (appliedTradeFilters.value.openClose === 'ALL' || trade.openClose === appliedTradeFilters.value.openClose)
-    && (appliedTradeFilters.value.orderType === 'ALL' || trade.orderType === appliedTradeFilters.value.orderType)))
+    ))
+function readHistorySource() { syncOrderClose(); return { orders: demoOrders.value, trades: allTradeRows.value } }
 const sortedTrades = computed(() => {
   const { prop, direction } = tradeSortState.value
   if (!prop || !direction) return trades.value
@@ -430,8 +443,8 @@ function dismissTransactionToast(id) {
   transactionToasts.value = transactionToasts.value.filter(toast => toast.message.id !== id)
 }
 function timestampNow() {
-  const date = new Date(), pad = value => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  const clock = marketClock()
+  return `${clock.date} ${clock.time}`
 }
 function enrichOrder(order) {
   const instrument = marketInstruments.find(item => item.code === order.code)
@@ -494,7 +507,9 @@ function orderSortValue(row, prop) {
   if (prop === 'canceledValue') return Number(row.canceledAmount || row.canceledQuantity) || 0
   return Number(row[prop]) || 0
 }
-function canceledOrderValue(row) { return row.canceledAmount ? money(row.canceledAmount) : row.canceledQuantity ? sharesWithUnit(row.canceledQuantity) : '--' }
+function canceledOrderValue(row) {
+  return row.inputAmount != null && row.canceledAmount ? `${money(row.canceledAmount)} ${({ CNY: '元', HKD: '港元', USD: '美元' }[currencyForRow(row)] || currencyForRow(row))}` : row.canceledQuantity ? sharesWithUnit(row.canceledQuantity) : '--'
+}
 function exportedOrderAmount(row) {
   if (row.inputAmount !== null && row.inputAmount !== undefined) return money(row.inputAmount)
   if (row.price !== null && row.price !== undefined) return money(row.quantity * row.price)
@@ -555,7 +570,7 @@ function downloadCsv(filename, header, records) {
 }
 function exportPositions(rows = sortedRows.value) {
   const header = ['多空方向', '证券代码', '证券名称', '持仓均价', '最新价', '期初数量', '持仓数量', '可用数量', '市值', '保证金占用(CNY)', '保证金率', '浮动盈亏', '下单账户', '市场', '币种', '订单类型', '执行算法', '下单备注', '交易员备注']
-  const records = rows.map(row => [row.direction, `${row.code}.${row.market}`, row.name, formatPrice(row.cost, row.market), formatPrice(row.price, row.market), number(row.opening), number(row.qty), number(row.available), money(row.value), row.marginOccupied == null ? '--' : money(row.marginOccupied), `${row.marginRate}%`, money(row.floatingProfit), accountLabel(row.account), marketLabel(row.market), row.currency, row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', row.traderRemark || '--'])
+  const records = rows.map(row => [row.direction, `${row.code}.${row.market}`, row.name, formatPrice(row.cost, row.market), formatPrice(row.price, row.market), number(row.opening), number(row.qty), number(row.available), money(row.value), row.marginOccupied == null ? '--' : money(row.marginOccupied), `${row.marginRate}%`, signedMoney(row.floatingProfit), accountLabel(row.account), marketLabel(row.market), row.currency, row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', row.traderRemark || '--'])
   downloadCsv('持仓列表.csv', header, records)
 }
 function exportOrders(rows = orders.value) {
@@ -673,17 +688,20 @@ function selectTicketAccount(id) { accountId.value = id }
 watch(accountId, () => { quote.value = null })
 watch(collapsed, async () => { await nextTick(); table.value?.doLayout?.() })
 watch(settingsVisible, visible => { if (!visible) { clearPasswordVerificationTimer(); settingsDetail.value = null } })
-function assetAmountParts(value) {
-  const amount = Number(value) || 0
+function assetAmountParts(value, signed = false) {
+  const amount = Math.abs(Number(value) || 0)
   const yi = Math.floor(amount / 100000000)
   const afterYi = amount - yi * 100000000
   const wan = Math.floor(afterYi / 10000)
   const rest = (afterYi - wan * 10000).toFixed(2)
-  return [
+  const parts = [
     ...(yi ? [{ value: number(yi), unit: '亿' }] : []),
     ...(wan || yi ? [{ value: number(wan), unit: '万' }] : []),
     { value: rest, unit: '' },
   ]
+  if (value < 0) parts[0].value = `-${parts[0].value}`
+  else if (signed && value > 0) parts[0].value = `+${parts[0].value}`
+  return parts
 }
 function acceptOrder(order, { skipHtSync = false } = {}) {
   if (!systemRunning.value) return
@@ -778,7 +796,7 @@ const terminalOrderStatuses = new Set(['部撤', '撤单', '全成', '拒单'])
 function isTerminalOrder(row) { return terminalOrderStatuses.has(row.status) }
 function canChaseOrder(row) { return systemRunning.value && (isTerminalOrder(row) || canOperateOrder(row)) }
 function canAmendOrder(row) { return !isTerminalOrder(row) && canOperateOrder(row) }
-function canConvertToManual(row) { return systemRunning.value && row.status === '拒单' && row.orderType === '系统单' }
+function canConvertToManual(row) { return systemRunning.value && row.status === '异常' && row.orderType === '系统单' }
 function orderActionLabel(row, action) {
   if (!systemRunning.value) return '系统已暂停交易'
   if (action === '追加订单' && isTerminalOrder(row)) return '基于原订单信息再次下单'
@@ -959,7 +977,8 @@ onBeforeUnmount(() => {
   transactionToastTimers.forEach(({ countdownTimer, dismissTimer }) => { window.clearInterval(countdownTimer); window.clearTimeout(dismissTimer) })
   transactionToastTimers.clear()
 })
-provide(tradingContextKey, {
+const recordTableContext = {
+  money, formatPrice, readHistorySource,
   acceptAmendOrder, acceptChaseOrder, acceptClosePosition, acceptOrder, acceptTrsOrder, account, accountLabel, activeTraderGroup, activeTraderPrimary,
   activeTraderSecondary, allAccountsValue, allRows, amendOrderVisible, amendingAccount, amendingOrder, amendingSymbol, applyFilters, applyOrderFilters,
   applyTradeFilters, assetAmountParts, assetUrl, assetsCollapsed, assetsVisible, canAmendOrder, canChaseOrder, canConvertToManual, canOperateOrder,
@@ -977,16 +996,29 @@ provide(tradingContextKey, {
   timeLabel, toggleAssetsVisible, toggleOrderSort, toggleOrderStatus, toggleSort, toggleSystemStatus, toggleTradeSort, tradeColumnDefaults, tradeColumnOptions,
   tradeFilters, tradeSortState, tradeStatusLabel, tradeStatusVisual, tradeVisibleColumnKeys, traderPrimaryMenu, traderSecondaryCollapsed, trades, transactionToasts,
   trsOrderRequest, trsOrderTicketVisible, trsTicketInstruments, trsTicketSymbol, updateGlobalAccountSelection, visibleColumnKeys, visibleOrderFilterCount, workspace,
-})
+}
+provide(tradingContextKey, recordTableContext)
 </script>
 
 <template>
   <TradingAppShell :variant="variant" :visible-nav="visibleNav" :overflow-nav="overflowNav" :active-nav="activeNav" :show-header-notice="showHeaderNotice" :system-notice-enabled="systemNoticeEnabled" :system-running="systemRunning" :header-notice="headerNotice" :show-unread-badge="showUnreadBadge" :unread-message-count="unreadMessageCount" :help-center-url="helpCenterUrl" @select-nav="selectProductNav" @open-message-center="openMessageCenter" @dismiss-notice="dismissHeaderNotice" @open-settings="settingsVisible=true" @open-help-center="openHelpCenter" @trigger-demo-toast="triggerDemoTransactionToast">
+    <template #notifications>
+      <aside class="transaction-toast-stack" aria-live="polite" aria-label="订单结果提示">
+        <transition-group name="transaction-toast">
+          <article v-for="(toast, index) in visibleTransactionToasts" :key="toast.message.id" class="transaction-toast-card" :class="{ 'is-behind': index > 0 }" :style="{ '--toast-depth': index }" :aria-hidden="index > 0 ? true : undefined" :inert="index > 0 ? true : undefined">
+            <header><span class="transaction-toast-type"><img :src="messageIcon('消息')" alt="">权益交易 · 订单回报</span><span class="transaction-toast-countdown">{{ toast.remaining }}s 后自动关闭</span><button type="button" :aria-label="`关闭${toast.message.title}`" @click="dismissTransactionToast(toast.message.id)"><el-icon><Close /></el-icon></button></header>
+            <p class="transaction-toast-instrument"><span>{{ toast.message.trade.name }}</span><small>（{{ toast.message.trade.code }}）</small><em :class="`is-${tradeStatusVisual(toast.message.trade.status).tone}`"><el-icon><component :is="tradeStatusVisual(toast.message.trade.status).icon" /></el-icon>{{ tradeStatusLabel(toast.message.trade.status) }}</em></p>
+            <dl class="transaction-toast-metrics"><div><dt>{{ toast.message.trade.quantityLabel || '成交数量' }}</dt><dd>{{ toast.message.trade.quantity ? `${number(toast.message.trade.quantity)} 股` : '--' }}</dd></div><div><dt>{{ toast.message.trade.priceLabel || '成交均价' }}</dt><dd>{{ toast.message.trade.price !== null ? `${money(toast.message.trade.price)} CNY` : '--' }}</dd></div></dl>
+            <button v-if="transactionToasts.length > 1 && index === 0" type="button" class="transaction-toast-summary" @click="openMessageCenter">共 {{ transactionToasts.length }} 条订单回报 · 查看全部</button>
+          </article>
+        </transition-group>
+      </aside>
+    </template>
     <OptionsTradingPage v-if="activeNav === '期权交易'" />
     <FinancingPage v-else-if="activeNav === '融资申请'" />
     <StrategyTradingPage v-else-if="activeNav === '策略交易'" />
-    <DataPage v-else-if="activeNav === '数据'" />
-    <EquityTradingPage v-else />
+    <EquityTradingPage v-else-if="activeNav !== '数据'" />
+    <KeepAlive><DataPage v-if="activeNav === '数据'" :accounts="accounts" :context="recordTableContext" /></KeepAlive>
     <BaseDialog v-model="messageCenterVisible" width="760px" align-center class="message-center-dialog" :show-close="false">
       <template #header><header class="message-center-header"><h2>消息中心</h2><div class="message-header-actions"><button type="button" class="message-close-action" aria-label="关闭消息中心" @click="messageCenterVisible=false"><el-icon><Close /></el-icon></button></div></header></template>
       <div class="message-center-layout"><nav class="message-category-tabs" aria-label="消息分类"><button v-for="category in messageCategories" :key="category" :class="{ active: messageCategory === category }" @click="messageCategory=category"><img class="message-category-icon" :src="messageIcon(category)" alt=""><span>{{ category }}</span><i v-if="categoryUnreadCount(category)">{{ categoryUnreadCount(category) }}</i></button></nav>

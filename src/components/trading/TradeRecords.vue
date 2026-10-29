@@ -1,0 +1,50 @@
+<script setup>
+import { withoutShareUnit } from '../../utils/tableQuantity.js'
+import { useSlots } from 'vue'
+import { ArrowDownBold, Search, Refresh, InfoFilled } from '@element-plus/icons-vue'
+import SortHeader from './SortHeader.vue'
+import ColumnConfigPopover from './ColumnConfigPopover.vue'
+import TradingTable from './TradingTable.vue'
+const props = defineProps({ context: { type: Object, required: true }, historical: Boolean, additionalFilterCount: { type: Number, default: 1 }, indexOffset: { type: Number, default: 0 } })
+const extraFilterCount = useSlots()['after-symbol'] ? props.additionalFilterCount : 0
+const { orderFilterBar, visibleOrderFilterCount, money, formatPrice, chaseActionsVisible, tradeFilters, tradeSortState, tradeVisibleColumnKeys, tradeColumnOptions, tradeColumnDefaults, sortedTrades, tableRefreshKey, copyableIdentifierCellClass, handleTableCellDoubleClick, accountLabel, marketLabel, timeLabel, currencyForRow, sharesWithUnit, orderActivityHint, orderActivity, openOrderHistory, toggleTradeSort, applyTradeFilters, clearTradeFilters, confirmExport, refreshTable } = props.context
+</script>
+
+<template>
+          <div ref="orderFilterBar" class="order-filters">
+            <el-input class="order-symbol-filter" v-model="tradeFilters.symbol" :prefix-icon="Search" placeholder="标的名称 / 代码" aria-label="搜索成交标的" clearable />
+            <slot name="after-symbol" :visible-count="visibleOrderFilterCount" :visible="visibleOrderFilterCount > 0" :in-popover="false" />
+            <el-select v-show="visibleOrderFilterCount > 0 + extraFilterCount" class="order-filter-optional" v-model="tradeFilters.side" aria-label="买卖方向筛选" popper-class="variant-popper" :offset="2"><el-option label="买卖方向" value="ALL"/><el-option label="买" value="buy"/><el-option label="卖" value="sell"/></el-select>
+            <el-select v-show="visibleOrderFilterCount > 1 + extraFilterCount" class="order-filter-optional" v-model="tradeFilters.openClose" aria-label="开平类型筛选" popper-class="variant-popper" :offset="2"><el-option label="开平类型" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select>
+            <el-popover trigger="click" placement="bottom-start" :width="260" popper-class="variant-popper order-filter-more-popper"><template #reference><el-button v-show="visibleOrderFilterCount < 2 + extraFilterCount" class="order-filter-more" aria-label="更多筛选条件">更多<el-icon><ArrowDownBold /></el-icon></el-button></template><div class="order-filter-more-panel"><slot name="after-symbol" :visible-count="visibleOrderFilterCount" :visible="visibleOrderFilterCount <= 0" :in-popover="true" /><label v-if="visibleOrderFilterCount <= 0 + extraFilterCount">买卖方向<el-select v-model="tradeFilters.side" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="买" value="buy"/><el-option label="卖" value="sell"/></el-select></label><label v-if="visibleOrderFilterCount <= 1 + extraFilterCount">开平类型<el-select v-model="tradeFilters.openClose" popper-class="variant-popper"><el-option label="全部" value="ALL"/><el-option label="开仓" value="开"/><el-option label="平仓" value="平"/></el-select></label></div></el-popover>
+            <el-button class="filter-query" @click="applyTradeFilters">查询</el-button><el-button link @click="clearTradeFilters">重置</el-button>
+            <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新成交记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><button class="export-orders" aria-label="导出成交记录" title="导出当前成交表格数据" @click="confirmExport('trades')"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></div>
+          </div>
+          <TradingTable :key="`trades-${tableRefreshKey}`" class="original-fields orders-table trades-table" :data="sortedTrades" height="100%" :fit="false" empty-text="暂无成交记录" :cell-class-name="copyableIdentifierCellClass" @cell-dblclick="handleTableCellDoubleClick">
+            <el-table-column type="index" :index="index => indexOffset + index + 1" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
+            <slot name="leading-columns" />
+            <template v-for="columnKey in tradeVisibleColumnKeys" :key="columnKey">
+              <el-table-column v-if="columnKey === 'side'" prop="side" label="方向" width="64" align="left" header-align="left"><template #default="{row}"><span :class="row.side === 'buy' ? 'up' : 'down'">{{ row.side === 'buy' ? '买' : '卖' }}</span></template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'openClose'" prop="openClose" label="开平方向" width="64" align="left" header-align="left"><template #default="{row}">{{ row.openClose === '开' ? '开仓' : '平仓' }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'code'" prop="code" label="证券代码" width="68" />
+              <el-table-column v-else-if="columnKey === 'name'" prop="name" label="证券名称" width="68" />
+              <el-table-column v-else-if="columnKey === 'filledPrice'" prop="filledPrice" width="88" align="right" header-align="right"><template #header><SortHeader :label="historical ? '成交价格' : '成交均价'" numeric :direction="tradeSortState.prop === 'filledPrice' ? tradeSortState.direction : null" @sort="toggleTradeSort('filledPrice')" /></template><template #default="{row}">{{ formatPrice(row.filledPrice, row.market) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledQuantity'" prop="filledQuantity" width="88" align="right" header-align="right"><template #header><SortHeader label="成交数量" numeric :direction="tradeSortState.prop === 'filledQuantity' ? tradeSortState.direction : null" @sort="toggleTradeSort('filledQuantity')" /></template><template #default="{row}">{{ withoutShareUnit(sharesWithUnit(row.filledQuantity)) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledAmount'" prop="filledAmount" width="112" align="right" header-align="right"><template #header><SortHeader label="成交金额" numeric :direction="tradeSortState.prop === 'filledAmount' ? tradeSortState.direction : null" @sort="toggleTradeSort('filledAmount')" /></template><template #default="{row}">{{ money(row.filledAmount) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'filledTime'" prop="filledTime" label="成交时间" width="80"><template #default="{row}">{{ timeLabel(row.filledTime) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'orderTime'" prop="orderTime" label="订单时间" width="80"><template #default="{row}">{{ timeLabel(row.orderTime) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'tradeNo'" prop="tradeNo" label="成交编号" width="128" />
+              <el-table-column v-else-if="columnKey === 'entrustNo'" prop="entrustNo" label="订单编号" width="128" />
+              <el-table-column v-else-if="columnKey === 'tradeDate'" prop="tradeDate" label="交易日期" width="100" />
+              <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="132"><template #default="{row}">{{ accountLabel(row.account) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'market'" prop="market" label="市场" width="48"><template #default="{row}">{{ marketLabel(row.market) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'currency'" prop="currency" label="币种" width="56"><template #default="{row}">{{ currencyForRow(row) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'feedback'" prop="feedback" label="订单动态" width="168" show-overflow-tooltip><template #header><span class="order-activity-heading"><span>订单动态</span><el-tooltip :content="orderActivityHint" :trigger="['hover', 'focus']" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="订单动态说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></span></template><template #default="{row}">{{ orderActivity(row) }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'orderType'" prop="orderType" label="订单类型" width="64" align="left" header-align="left"><template #default="{row}"><span class="order-type-tag" :class="row.orderType === '手工单' ? 'is-manual' : 'is-system'">{{ row.orderType || '--' }}</span></template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'algorithm'" prop="algorithm" label="执行算法" width="64" align="center" header-align="center"><template #default="{row}">{{ row.algorithm || '--' }}</template></el-table-column>
+              <el-table-column v-else-if="columnKey === 'orderRemark'" prop="orderRemark" label="下单备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.orderRemark || '--' }}</template></el-table-column>
+            </template>
+            <el-table-column v-if="!historical" label="历史" width="52" align="center" header-align="center" class-name="history-column" label-class-name="history-column"><template #default="{row}"><button type="button" class="history-view" @click.stop="openOrderHistory(row)">查看</button></template></el-table-column>
+            <el-table-column width="22" fixed="right" align="center" header-align="center" class-name="column-config-column" label-class-name="column-config-column"><template #header><ColumnConfigPopover v-model="tradeVisibleColumnKeys" :options="tradeColumnOptions" :defaults="tradeColumnDefaults" /></template></el-table-column>
+          </TradingTable>
+</template>

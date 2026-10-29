@@ -1,3 +1,4 @@
+import { formatPnl } from '../../utils/pnlFormat.js'
 import { hongKongDemoInstruments } from './hongKongInstruments.js'
 import { positions } from './fixtures'
 const truncate = (value, digits) => {
@@ -6,6 +7,7 @@ const truncate = (value, digits) => {
   return Object.is(result, -0) ? 0 : result
 }
 export const money = n => truncate(n, 2).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export const signedMoney = value => formatPnl(value, money)
 export const number = n => truncate(n, 3).toLocaleString('en-US', { maximumFractionDigits: 3 })
 export const price = (n, market) => {
   const digits = market === 'HK' ? 3 : 2

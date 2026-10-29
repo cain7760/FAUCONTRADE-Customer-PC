@@ -30,6 +30,7 @@ const assetUrl = name => `${import.meta.env.BASE_URL}original-icons/${name}`
       <section v-if="showHeaderNotice && systemNoticeEnabled && !systemRunning" class="header-marquee" aria-label="系统通知" role="button" tabindex="0" @click="emit('open-message-center')" @keydown.enter="emit('open-message-center')"><el-icon><InfoFilled /></el-icon><b>系统通知</b><span class="notice-scroll"><i>{{ headerNotice.text }}　{{ headerNotice.text }}</i></span><button type="button" aria-label="关闭系统通知" @click.stop="emit('dismiss-notice')"><el-icon><Close /></el-icon></button></section>
       <div class="variant-header-end"><button class="notification-action" aria-label="打开消息中心" @click="emit('open-message-center')"><ClientLineIcon type="notification" /><em v-if="showUnreadBadge && unreadMessageCount">{{ unreadMessageCount }}</em></button><button class="header-settings-action" aria-label="系统设置" @click="emit('open-settings')"><el-icon><Setting /></el-icon></button><el-tooltip :content="helpCenterUrl ? '打开帮助中心' : '帮助中心地址待配置'" placement="bottom"><button class="header-help-action" :aria-label="helpCenterUrl ? '打开帮助中心' : '帮助中心地址待配置'" @click="emit('open-help-center')"><ClientLineIcon type="help" /></button></el-tooltip><button type="button" class="small-avatar avatar-toast-trigger" aria-label="触发交易消息提示" @click="emit('trigger-demo-toast')">K</button><span>Kevin Zhang</span></div>
     </header>
+    <slot name="notifications" />
     <slot />
   </main>
 </template>

@@ -213,10 +213,10 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
 .amend-order-overview h3 { flex: none; margin: 0; color: #e8eaed; font-size: 12px; font-weight: 600; }
 .amend-order-overview-heading > span { min-width: 0; overflow: hidden; color: #949daa; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .amend-order-overview-heading b { color: #edf0f4; font-weight: 500; }
-.amend-order-overview dl { display: grid; grid-template-columns: 88px repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.amend-order-overview dl { display: grid; grid-template-columns: 88px repeat(3, minmax(max-content, 1fr)); gap: 8px; margin: 0; overflow-x: auto; }
 .amend-order-overview dl > div { min-width: 0; }
 .amend-order-overview dt { color: #949daa; font-size: 10px; white-space: nowrap; }
-.amend-order-overview dd { overflow: hidden; margin: 4px 0 0; color: #edf0f4; font-size: 12px; line-height: 17px; text-overflow: ellipsis; white-space: nowrap; }
+.amend-order-overview dd { margin: 4px 0 0; color: #edf0f4; font-size: 12px; line-height: 17px; white-space: nowrap; }
 .amend-order-overview .amend-order-tags { display: flex; gap: 4px; overflow: visible; }
 .amend-order-tag { display: inline-flex; align-items: center; height: 17px; padding: 0 4px; border-radius: 2px; background: #393d43; color: #edf0f4; font-size: 10px; line-height: 17px; }
 .amend-order-tag.is-buy { background: var(--ft-color-buy); color: #fff; }
@@ -242,7 +242,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
 .variants-app .amend-order-dialog .cp-market .book-depths { transform: none; }
 .variants-app .amend-order-dialog .amend-order-capacity { margin-top: 12px; }
 .variants-app .amend-order-dialog .amend-order-capacity b,
-.variants-app .amend-order-dialog .amend-order-summary b { font-family: 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif; font-variant-numeric: tabular-nums; }
+.variants-app .amend-order-dialog .amend-order-summary b { font-family: var(--ft-font-numeric); font-variant-numeric: tabular-nums; }
 .variants-app .amend-order-dialog .amend-order-summary b { font-weight: 400; }
 .variants-app .amend-order-dialog .cp-order { display: flex; flex-direction: column; overflow: hidden; }
 /* Keep 12px side/bottom padding and add 8px above the amend form. */

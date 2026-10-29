@@ -1,7 +1,7 @@
 <script setup>
 import { computed, inject, ref, watch } from 'vue'
 import { ArrowDownBold, Hide, View } from '@element-plus/icons-vue'
-import { money } from '../variantData'
+import { money, signedMoney } from '../variantData'
 import { tradingContextKey } from '../tradingContext'
 import OrderBook from './OrderBook.vue'
 import OrderTicket from './OrderTicket.vue'
@@ -59,7 +59,7 @@ watch(() => props.symbol?.code, () => { quote.value = null })
         <div v-show="!assetsCollapsed" class="asset-summary-grid">
           <div v-for="metric in assetSummaryMetrics" :key="metric.key" class="asset-metric" :class="[metric.tone, { 'asset-available': metric.key === 'available' }]">
             <span>{{ metric.label }}</span>
-            <el-tooltip v-if="assetsVisible && metric.value != null" placement="top" popper-class="asset-value-popper"><template #content><span class="asset-large-value" :class="metric.tone"><template v-for="part in assetAmountParts(metric.value)" :key="`${part.value}${part.unit}`"><b>{{ part.value }}</b><i v-if="part.unit">{{ part.unit }}</i></template></span></template><b class="asset-number" :class="metric.tone">{{ money(metric.value) }}</b></el-tooltip>
+            <el-tooltip v-if="assetsVisible && metric.value != null" placement="top" popper-class="asset-value-popper"><template #content><span class="asset-large-value" :class="metric.tone"><template v-for="part in assetAmountParts(metric.value, metric.key === 'floatingProfit')" :key="`${part.value}${part.unit}`"><b>{{ part.value }}</b><i v-if="part.unit">{{ part.unit }}</i></template></span></template><b class="asset-number" :class="metric.tone">{{ metric.key === 'floatingProfit' ? signedMoney(metric.value) : money(metric.value) }}</b></el-tooltip>
             <b v-else class="asset-number">{{ assetsVisible ? '--' : '••••••••' }}</b><small>CNY</small>
           </div>
         </div>

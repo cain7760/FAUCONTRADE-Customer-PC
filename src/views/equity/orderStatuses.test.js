@@ -37,14 +37,15 @@ test('所有演示订单使用有效状态，拒单与异常保留独立样本�
   assert.equal(visual('部撤').tone, 'draft')
 })
 
-test('新状态沿用原操作门禁，拒单系统单可转手工，异常不可交易', () => {
+test('仅异常系统单允许转手工，拒单和手工单不可转，改撤门禁不变', () => {
   const context = { systemRunning: { value: true }, cancelableQuantity: evaluate('cancelableQuantity') }
   const canOperate = evaluate('canOperateOrder', context), canConvert = evaluate('canConvertToManual', context)
   const row = { quantity: 1000, filledQuantity: 0, orderType: '系统单' }
   for (const status of expected) assert.equal(canOperate({ ...row, status }), ['待报', '已报', '部成'].includes(status))
-  assert.equal(canConvert({ ...row, status: '拒单' }), true)
+  assert.equal(canConvert({ ...row, status: '拒单' }), false)
   assert.equal(canConvert({ ...row, status: '拒单', orderType: '手工单' }), false)
-  assert.equal(canConvert({ ...row, status: '异常' }), false)
+  assert.equal(canConvert({ ...row, status: '异常' }), true)
+  assert.equal(canConvert({ ...row, status: '异常', orderType: '手工单' }), false)
   assert.deepEqual([...evaluate('terminalOrderStatuses')], ['部撤', '撤单', '全成', '拒单'])
 })
 
