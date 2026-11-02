@@ -36,5 +36,6 @@ function submit(order) {
 </template>
 
 <style>
+.variants-app .close-dialog .order-account-block .el-select__wrapper.is-disabled .el-select__suffix{display:none}
 .variants-app .close-dialog .cp-layout{max-height:calc(100vh - var(--ft-dialog-top) - 60px);overflow-y:auto}
 </style>
