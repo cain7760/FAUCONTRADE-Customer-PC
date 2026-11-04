@@ -73,9 +73,6 @@ export const tableFieldDefinitions = {
     { id: 'market', label: '市场', key: 'ExchangeType', description: 'HK/US/CN，经 exchange_type 字典展示。' },
     { id: 'currency', label: '币种', key: 'Currency', description: '优先使用成交币种，演示数据按市场推断。' },
     { id: 'orderType', label: '订单类型', key: 'OrderSourceType', description: '系统单或手工单。' },
-    { id: 'algorithm', label: '执行算法', key: 'ExecutionAlgorithm', description: '来源订单的执行算法，如 POV、DMA。' },
-    { id: 'orderRemark', label: '下单备注', key: 'OrderRemark', description: '客户提交手工单时填写的备注。' },
-    { id: 'feedback', label: '订单动态', key: 'Remark', description: '合并展示系统反馈与交易员备注，并同步至消息中心。' },
     { id: 'openClose', label: '开平方向', key: 'OpenClose', description: '1=开，2=平；取 open_close 字典。' },
   ],
 }

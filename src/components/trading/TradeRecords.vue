@@ -1,13 +1,13 @@
 <script setup>
 import { withoutShareUnit } from '../../utils/tableQuantity.js'
 import { useSlots } from 'vue'
-import { ArrowDownBold, Search, Refresh, InfoFilled } from '@element-plus/icons-vue'
+import { ArrowDownBold, Search, Refresh } from '@element-plus/icons-vue'
 import SortHeader from './SortHeader.vue'
 import ColumnConfigPopover from './ColumnConfigPopover.vue'
 import TradingTable from './TradingTable.vue'
 const props = defineProps({ context: { type: Object, required: true }, historical: Boolean, additionalFilterCount: { type: Number, default: 1 }, indexOffset: { type: Number, default: 0 } })
 const extraFilterCount = useSlots()['after-symbol'] ? props.additionalFilterCount : 0
-const { orderFilterBar, visibleOrderFilterCount, money, formatPrice, chaseActionsVisible, tradeFilters, tradeSortState, tradeVisibleColumnKeys, tradeColumnOptions, tradeColumnDefaults, sortedTrades, tableRefreshKey, copyableIdentifierCellClass, handleTableCellDoubleClick, accountLabel, marketLabel, timeLabel, currencyForRow, sharesWithUnit, orderActivityHint, orderActivity, openOrderHistory, toggleTradeSort, applyTradeFilters, clearTradeFilters, confirmExport, refreshTable } = props.context
+const { orderFilterBar, visibleOrderFilterCount, money, formatPrice, chaseActionsVisible, tradeFilters, tradeSortState, tradeVisibleColumnKeys, tradeColumnOptions, tradeColumnDefaults, sortedTrades, tableRefreshKey, copyableIdentifierCellClass, handleTableCellDoubleClick, accountLabel, marketLabel, timeLabel, currencyForRow, sharesWithUnit, openOrderHistory, toggleTradeSort, applyTradeFilters, clearTradeFilters, confirmExport, refreshTable } = props.context
 </script>
 
 <template>
@@ -39,10 +39,7 @@ const { orderFilterBar, visibleOrderFilterCount, money, formatPrice, chaseAction
               <el-table-column v-else-if="columnKey === 'account'" prop="account" label="下单账户" width="132"><template #default="{row}">{{ accountLabel(row.account) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'market'" prop="market" label="市场" width="48"><template #default="{row}">{{ marketLabel(row.market) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'currency'" prop="currency" label="币种" width="56"><template #default="{row}">{{ currencyForRow(row) }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'feedback'" prop="feedback" label="订单动态" width="168" show-overflow-tooltip><template #header><span class="order-activity-heading"><span>订单动态</span><el-tooltip :content="orderActivityHint" :trigger="['hover', 'focus']" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="订单动态说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></span></template><template #default="{row}">{{ orderActivity(row) }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'orderType'" prop="orderType" label="订单类型" width="64" align="left" header-align="left"><template #default="{row}"><span class="order-type-tag" :class="row.orderType === '手工单' ? 'is-manual' : 'is-system'">{{ row.orderType || '--' }}</span></template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'algorithm'" prop="algorithm" label="执行算法" width="64" align="center" header-align="center"><template #default="{row}">{{ row.algorithm || '--' }}</template></el-table-column>
-              <el-table-column v-else-if="columnKey === 'orderRemark'" prop="orderRemark" label="下单备注" width="128" show-overflow-tooltip><template #default="{row}">{{ row.orderRemark || '--' }}</template></el-table-column>
             </template>
             <el-table-column v-if="!historical" label="历史" width="52" align="center" header-align="center" class-name="history-column" label-class-name="history-column"><template #default="{row}"><button type="button" class="history-view" @click.stop="openOrderHistory(row)">查看</button></template></el-table-column>
             <el-table-column width="22" fixed="right" align="center" header-align="center" class-name="column-config-column" label-class-name="column-config-column"><template #header><ColumnConfigPopover v-model="tradeVisibleColumnKeys" :options="tradeColumnOptions" :defaults="tradeColumnDefaults" /></template></el-table-column>

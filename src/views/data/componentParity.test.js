@@ -52,3 +52,16 @@ test('确认书与持仓使用同一操作列，列设置不再拆为独立列',
   assert.ok(shared.includes('ColumnConfigPopover'))
   assert.doesNotMatch(read('./ConfirmationRecords.vue'), /class-name="column-config-column"/)
 })
+
+
+test('平仓与改单共用信息摘要及左栏行情布局，平仓保留四项持仓字段', () => {
+  for (const name of ['ClosePositionDialog.vue', 'AmendOrderDialog.vue']) {
+    const source = read('../equity/components/' + name)
+    assert.ok(source.includes('../../../components/trading/OrderContextOverview.vue'))
+    assert.ok(source.includes('hide-metrics market-overview'))
+    assert.match(source, /<template #overview>[\s\S]*<OrderContextOverview/)
+  }
+  const close = read('../equity/components/ClosePositionDialog.vue')
+  for (const label of ['持仓股数(股)', '持仓市值(CNY)', '可平股数(股)', '持仓均价(CNY)']) assert.ok(close.includes(label))
+  assert.ok(read('../equity/components/PositionOrderDialog.vue').includes("'has-market-overview': marketOverview"))
+})

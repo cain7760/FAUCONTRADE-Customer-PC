@@ -14,6 +14,7 @@ import { useDialogShortcuts } from '../../composables/useDialogShortcuts'
 import BaseDialog from '../../components/BaseDialog.vue'
 import { addManualEquityOrderToPool, recordPlacedTrsOrder } from './trsOrderStore'
 import TradingAppShell from '../../layout/TradingAppShell.vue'
+import HeaderTransactionNotice from '../../layout/HeaderTransactionNotice.vue'
 import { tradingContextKey } from './tradingContext'
 import EquityTradingPage from './pages/EquityTradingPage.vue'
 import OptionsTradingPage from './pages/OptionsTradingPage.vue'
@@ -21,6 +22,8 @@ import FinancingPage from './pages/FinancingPage.vue'
 import StrategyTradingPage from './pages/StrategyTradingPage.vue'
 import DataPage from '../data/DataPage.vue'
 import { useOrderSessionExpiry } from '../../composables/useOrderSessionExpiry.js'
+import { useTradingTime } from '../../composables/useTradingTime.js'
+import { deferLunchOperation, flushLunchOperations } from '../../domain/orders/lunchBreak.js'
 import { marketClock } from '../../domain/orders/marketSession.js'
 
 const initialVariant = new URLSearchParams(location.search).get('layout')
@@ -54,8 +57,24 @@ const theme = ref('dark')
 const autoLaunch = ref(false)
 const emergencyMessage = ref(null)
 const systemRunning = ref(true)
+const { tradingTimeMode, setTradingTimeMode, tradingTimeError } = useTradingTime()
+function canSubmitTradingOperation() {
+  const error = tradingTimeError()
+  if (error) { ElMessage.error(error); return false }
+  return true
+}
 const transactionToasts = ref([])
-const visibleTransactionToasts = computed(() => transactionToasts.value.slice(-3).reverse())
+const latestTransactionNotice = computed(() => {
+  const message = transactionToasts.value.at(-1)?.message
+  if (!message) return null
+  const trade = message.trade
+  return {
+    id: message.id, name: trade.name, code: trade.code,
+    status: tradeStatusLabel(trade.status), tone: tradeStatusVisual(trade.status).tone,
+    quantityLabel: trade.quantityLabel || '成交数量', quantity: trade.quantity ? `${number(trade.quantity)} 股` : '--',
+    priceLabel: trade.priceLabel || '成交均价', price: trade.price != null ? `${money(trade.price)} ${trade.currency || 'CNY'}` : '--',
+  }
+})
 const transactionToastTimers = new Map()
 const headerNotice = computed(() => systemRunning.value ? null : {
   id: 'system-interrupted', text: '交易系统当前中断，下单服务暂不可用；已提交订单请以订单状态为准。',
@@ -162,7 +181,7 @@ const demoOrders = ref(demoOrderStatuses.map((status, index) => {
   }
 }))
 const syncedHtPositions = ref([])
-const syncOrderClose = useOrderSessionExpiry(demoOrders)
+const syncOrderClose = useOrderSessionExpiry(demoOrders, { demoMode: tradingTimeMode, onTick: processLunchOperations })
 const orderFilters = ref({ orderNo: '', symbol: '', side: 'ALL', openClose: 'ALL', orderType: 'ALL', status: [] })
 const orderFilterBar = ref(null)
 const visibleOrderFilterCount = ref(5)
@@ -583,10 +602,10 @@ function exportOrders(rows = orders.value) {
   downloadCsv('订单记录.csv', header, records)
 }
 function exportTrades(rows = sortedTrades.value) {
-  const header = ['方向', '证券代码', '证券名称', '成交均价', '成交数量', '成交金额', '成交时间', '订单时间', '成交编号', '订单编号', '交易日期', '下单账户', '市场', '币种', '订单类型', '执行算法', '下单备注', '订单动态', '开平方向']
+  const header = ['方向', '证券代码', '证券名称', '成交均价', '成交数量', '成交金额', '成交时间', '订单时间', '成交编号', '订单编号', '交易日期', '下单账户', '市场', '币种', '订单类型', '开平方向']
   const records = rows.map(row => [
     row.side === 'buy' ? '买' : '卖', row.code, row.name, formatPrice(row.filledPrice, row.market), number(row.filledQuantity), money(row.filledAmount),
-    timeLabel(row.filledTime), timeLabel(row.orderTime), row.tradeNo, row.entrustNo, row.tradeDate, accountLabel(row.account), marketLabel(row.market), currencyForRow(row), row.orderType || '--', row.algorithm || '--', row.orderRemark || '--', orderActivity(row), row.openClose === '开' ? '开仓' : '平仓',
+    timeLabel(row.filledTime), timeLabel(row.orderTime), row.tradeNo, row.entrustNo, row.tradeDate, accountLabel(row.account), marketLabel(row.market), currencyForRow(row), row.orderType || '--', row.openClose === '开' ? '开仓' : '平仓',
   ])
   downloadCsv('成交记录.csv', header, records)
 }
@@ -704,6 +723,7 @@ function assetAmountParts(value, signed = false) {
   return parts
 }
 function acceptOrder(order, { skipHtSync = false } = {}) {
+  if (!canSubmitTradingOperation()) return
   if (!systemRunning.value) return
   const typeError = orderTypeError(order.type, order)
   if (typeError) { ElMessage.error(typeError); return }
@@ -717,6 +737,7 @@ function openTrsOrderTicket(request) {
   trsOrderTicketVisible.value = true
 }
 function acceptTrsOrder(order) {
+  if (!canSubmitTradingOperation() || !systemRunning.value) return
   acceptOrder(order, { skipHtSync: true })
   recordPlacedTrsOrder({ sourceOrderId: trsOrderRequest.value?.sourceOrderId, order })
   trsOrderRequest.value = null
@@ -773,6 +794,7 @@ function openChaseOrder(row) {
   chaseOrderVisible.value = true
 }
 function acceptClosePosition(order) {
+  if (!canSubmitTradingOperation()) return
   if (!systemRunning.value) return
   const typeError = orderTypeError(order.type, order)
   if (typeError) { ElMessage.error(typeError); return }
@@ -781,6 +803,7 @@ function acceptClosePosition(order) {
   publishTransactionMessage({ name: order.name, code: order.code, status: '卖出平仓订单已提交', quantity: order.quantity, quantityLabel: '订单数量', title: '平仓订单提交成功' })
 }
 function acceptChaseOrder(order) {
+  if (!canSubmitTradingOperation()) return
   if (!systemRunning.value) return
   const typeError = orderTypeError(order.type, order)
   if (typeError) { ElMessage.error(typeError); return }
@@ -835,16 +858,29 @@ function openAmendOrder(row) {
   amendingOrder.value = row
   amendOrderVisible.value = true
 }
+function processLunchOperations() {
+  if (!systemRunning.value) return
+  flushLunchOperations(demoOrders.value, (row, pending) => {
+    if (pending.action === 'amend') acceptAmendOrder(pending.payload)
+    else completeCancellation(row)
+  }, new Date(), tradingTimeMode.value)
+}
 function acceptAmendOrder(amendment) {
+  if (!canSubmitTradingOperation()) return
   if (!systemRunning.value) return
   const row = demoOrders.value.find(item => item.id === amendment.orderId)
   if (!row || !canOperateOrder(row)) return
   const typeError = orderTypeError(amendment.type, { ...amendingSymbol.value, ...row })
   if (typeError) { ElMessage.error(typeError); return }
+  if (deferLunchOperation(row, 'amend', { ...amendment, referencePrice: amendingSymbol.value?.price }, new Date(), tradingTimeMode.value)) {
+    ElMessage.success('改单提交成功')
+    tab.value = 'orders'
+    return
+  }
   const isLimit = amendment.type !== 'market'
   const nextPrice = isLimit ? amendment.price : null
   const delta = amendment.quantityDelta
-  const referencePrice = nextPrice ?? amendingSymbol.value?.price ?? 0
+  const referencePrice = nextPrice ?? amendment.referencePrice ?? amendingSymbol.value?.price ?? 0
   const amendedBaseQuantity = delta > 0 ? row.quantity : amendment.quantity
   if (row.filledQuantity > 0) {
     // The filled portion is immutable; replace only the outstanding shares.
@@ -938,6 +974,7 @@ function publishOrderOperationMessage(row, operation, success) {
   })
 }
 function confirmCancelOrder() {
+  if (!canSubmitTradingOperation()) return
   if (!systemRunning.value) { cancelOrderVisible.value = false; return }
   const row = cancelingOrder.value
   if (!row) return
@@ -950,6 +987,11 @@ function confirmCancelOrder() {
     cancelingOrder.value = null
     return
   }
+  if (!deferLunchOperation(row, 'cancel', {}, new Date(), tradingTimeMode.value)) completeCancellation(row)
+  cancelOrderVisible.value = false
+  cancelingOrder.value = null
+}
+function completeCancellation(row) {
   row.status = row.filledQuantity > 0 ? '部撤' : '撤单'
   row.canceledQuantity = cancelableQuantity(row)
   row.reportQuantity = 0
@@ -957,8 +999,6 @@ function confirmCancelOrder() {
   row.feedback = '撤单成功'
   publishOrderActivityMessage(row)
   publishOrderOperationMessage({ ...row, quantity: row.canceledQuantity, filledQuantity: 0 }, '撤单', true)
-  cancelOrderVisible.value = false
-  cancelingOrder.value = null
 }
 useDialogShortcuts(cancelOrderVisible, { confirm: confirmCancelOrder, cancel: () => { cancelOrderVisible.value = false } })
 useDialogShortcuts(convertManualVisible, { confirm: confirmConvertToManual, cancel: () => { convertManualVisible.value = false; conversionRemark.value = '' } })
@@ -978,6 +1018,7 @@ onBeforeUnmount(() => {
   transactionToastTimers.clear()
 })
 const recordTableContext = {
+  tradingTimeMode, setTradingTimeMode,
   money, formatPrice, readHistorySource,
   acceptAmendOrder, acceptChaseOrder, acceptClosePosition, acceptOrder, acceptTrsOrder, account, accountLabel, activeTraderGroup, activeTraderPrimary,
   activeTraderSecondary, allAccountsValue, allRows, amendOrderVisible, amendingAccount, amendingOrder, amendingSymbol, applyFilters, applyOrderFilters,
@@ -1003,16 +1044,7 @@ provide(tradingContextKey, recordTableContext)
 <template>
   <TradingAppShell :variant="variant" :visible-nav="visibleNav" :overflow-nav="overflowNav" :active-nav="activeNav" :show-header-notice="showHeaderNotice" :system-notice-enabled="systemNoticeEnabled" :system-running="systemRunning" :header-notice="headerNotice" :show-unread-badge="showUnreadBadge" :unread-message-count="unreadMessageCount" :help-center-url="helpCenterUrl" @select-nav="selectProductNav" @open-message-center="openMessageCenter" @dismiss-notice="dismissHeaderNotice" @open-settings="settingsVisible=true" @open-help-center="openHelpCenter" @trigger-demo-toast="triggerDemoTransactionToast">
     <template #notifications>
-      <aside class="transaction-toast-stack" aria-live="polite" aria-label="订单结果提示">
-        <transition-group name="transaction-toast">
-          <article v-for="(toast, index) in visibleTransactionToasts" :key="toast.message.id" class="transaction-toast-card" :class="{ 'is-behind': index > 0 }" :style="{ '--toast-depth': index }" :aria-hidden="index > 0 ? true : undefined" :inert="index > 0 ? true : undefined">
-            <header><span class="transaction-toast-type"><img :src="messageIcon('消息')" alt="">权益交易 · 订单回报</span><span class="transaction-toast-countdown">{{ toast.remaining }}s 后自动关闭</span><button type="button" :aria-label="`关闭${toast.message.title}`" @click="dismissTransactionToast(toast.message.id)"><el-icon><Close /></el-icon></button></header>
-            <p class="transaction-toast-instrument"><span>{{ toast.message.trade.name }}</span><small>（{{ toast.message.trade.code }}）</small><em :class="`is-${tradeStatusVisual(toast.message.trade.status).tone}`"><el-icon><component :is="tradeStatusVisual(toast.message.trade.status).icon" /></el-icon>{{ tradeStatusLabel(toast.message.trade.status) }}</em></p>
-            <dl class="transaction-toast-metrics"><div><dt>{{ toast.message.trade.quantityLabel || '成交数量' }}</dt><dd>{{ toast.message.trade.quantity ? `${number(toast.message.trade.quantity)} 股` : '--' }}</dd></div><div><dt>{{ toast.message.trade.priceLabel || '成交均价' }}</dt><dd>{{ toast.message.trade.price !== null ? `${money(toast.message.trade.price)} CNY` : '--' }}</dd></div></dl>
-            <button v-if="transactionToasts.length > 1 && index === 0" type="button" class="transaction-toast-summary" @click="openMessageCenter">共 {{ transactionToasts.length }} 条订单回报 · 查看全部</button>
-          </article>
-        </transition-group>
-      </aside>
+      <HeaderTransactionNotice :notice="latestTransactionNotice" :count="transactionToasts.length" @open-messages="messageCategory = '消息'; openMessageCenter()" />
     </template>
     <OptionsTradingPage v-if="activeNav === '期权交易'" />
     <FinancingPage v-else-if="activeNav === '融资申请'" />

@@ -1,4 +1,5 @@
 <script setup>
+import { isValidPovDuration } from '../../../domain/orders/povSchedule.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, RefreshRight, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -60,8 +61,9 @@ const heldUnderlyings = positions.map(position => ({
   price: position.price.toFixed(2),
 }))
 const customerNames = ['Kevin_292933', 'Olivia_102484', 'Ethan_843701', 'Sophia_591620', 'Liam_308416', 'Ava_774209', 'Noah_663845', 'Emma_420918', 'Lucas_857340', 'Mia_184276', 'Leo_530192', 'Ivy_949601', 'Owen_271860', 'Jade_560281', 'Harper_476910', 'Grace_183607']
-const povHourOptions = Array.from({ length: 24 }, (_, hour) => hour)
-const povMinuteOptions = Array.from({ length: 60 }, (_, minute) => minute)
+const povHourOptions = Array.from({ length: 7 }, (_, hour) => hour)
+const povMinuteOptions = computed(() => Array.from({ length: Number(splitAlgorithmDraft.value.povHours) === 6 ? 31 : 60 }, (_, minute) => minute))
+watch(() => splitAlgorithmDraft.value.povHours, value => { if (Number(value) === 6 && Number(splitAlgorithmDraft.value.povMinutes) > 30) splitAlgorithmDraft.value.povMinutes = 30 })
 function dealQuantityValue(value) {
   const text = String(value ?? '')
   return toNumeric(text) * (text.includes('万') ? 10000 : 1)
@@ -668,7 +670,7 @@ function removeSplitLine(index) {
 }
 const splitLineValue = line => Number(isAmountOrder.value ? line.amount : line.quantity) || 0
 const splitAllocatedQuantity = computed(() => Number(splitLines.value.reduce((sum, line) => sum + splitLineValue(line), 0).toFixed(2)))
-const hasInvalidPovSplitLine = line => line.strategy === 'POV' && (!Number.isInteger(Number(line.povHours)) || Number(line.povHours) < 0 || Number(line.povHours) > 23 || !Number.isInteger(Number(line.povMinutes)) || Number(line.povMinutes) < 0 || Number(line.povMinutes) > 59 || (Number(line.povHours) === 0 && Number(line.povMinutes) === 0) || Number(line.participation) <= 0 || Number(line.participation) > 25)
+const hasInvalidPovSplitLine = line => line.strategy === 'POV' && (!isValidPovDuration(line.povHours, line.povMinutes) || Number(line.participation) <= 0 || Number(line.participation) > 25)
 const splitAlgorithmParameterError = computed(() => hasInvalidPovSplitLine(splitAlgorithmDraft.value))
 function updateSplitAlgorithmPopover(line, visible) {
   if (!visible) {
@@ -691,7 +693,7 @@ function confirmSplit() {
   if (isApprovalPending.value) return
   if (!splitLines.value.length || splitLines.value.some(line => !line.account || splitLineValue(line) <= 0 || (line.orderType === 'limit' && Number(line.price) <= 0))) { splitError.value = `请补全每笔子单的下单账户、价格和${splitValueLabel.value}。`; return }
   if (placedOrderValue.value + splitAllocatedQuantity.value > originalOrderValue()) { splitError.value = `拆分总${splitValueLabel.value}不能超过客户订单${splitValueLabel.value}。`; return }
-  if (splitLines.value.some(hasInvalidPovSplitLine)) { splitError.value = 'POV策略需选择有效运行时间，市场成交占比必须为 1–25%。'; return }
+  if (splitLines.value.some(hasInvalidPovSplitLine)) { splitError.value = 'POV策略运行时间须大于 0 且不超过 6 小时 30 分钟，市场成交占比必须为 1–25%。'; return }
   const submittedOrders = splitLines.value.map(line => {
     const counterparty = line.counterparty && line.counterparty !== 'offline' ? line.counterparty : null
     const amount = isAmountOrder.value ? Number(line.amount) : null

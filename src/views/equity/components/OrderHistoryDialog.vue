@@ -30,8 +30,8 @@ function offsetTime(time, seconds) {
 }
 function statusRecord(row, time) {
   const status = row.status || '待报'
-  if (status === '全成') return { operator: '交易所', time, type: status, content: `订单已全部成交，成交数量 ${number(row.filledQuantity || row.quantity)} 股。` }
-  if (status === '部成') return { operator: '交易所', time, type: status, content: `订单已部分成交，成交数量 ${number(row.filledQuantity || 0)} 股。` }
+  if (status === '全成') return { operator: '系统', time, type: status, content: `订单已全部成交，成交数量 ${number(row.filledQuantity || row.quantity)} 股。` }
+  if (status === '部成') return { operator: '系统', time, type: status, content: `订单已部分成交，成交数量 ${number(row.filledQuantity || 0)} 股。` }
   if (status === '部撤' || status === '撤单') return { operator: '当前账户', time, type: status, content: row.feedback || '订单撤单结果已确认。' }
   if (status === '拒单') return { operator: '交易员', time, type: status, content: row.traderRemark || row.feedback || '订单未获通过。' }
   return { operator: '交易员', time, type: status, content: row.feedback || `订单状态更新为${status}。` }

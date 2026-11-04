@@ -12,7 +12,7 @@ function scenario(filledQuantity = 0) {
   const row = { id: 'one', orderNo: 'WT1', code: '000001', name: '平安银行', market: 'SZ', account: 'TZS_T0',
     quantity: 1000, filledQuantity, price: 12, side: 'buy', openClose: '开', status: filledQuantity ? '部成' : '已报', inputAmount: null }
   const notifications = [], success = [], errors = []
-  const context = { systemRunning: { value: true }, demoOrders: { value: [row] }, canOperateOrder: target => ['待报', '已报', '部成'].includes(target.status),
+  const context = { deferLunchOperation: () => false, tradingTimeMode: { value: 'trading' }, canSubmitTradingOperation: () => true, systemRunning: { value: true }, demoOrders: { value: [row] }, canOperateOrder: target => ['待报', '已报', '部成'].includes(target.status),
     orderTypeError, amendingSymbol: { value: { price: 12 } }, enrichOrder: value => ({ ...value }), number: String, money: String,
     tab: { value: 'positions' }, ElMessage: { success: value => success.push(value), error: value => errors.push(value) },
     publishOrderActivityMessage: () => notifications.push('activity'), publishTransactionMessage: () => notifications.push('transaction') }
