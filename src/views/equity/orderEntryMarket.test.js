@@ -150,3 +150,20 @@ test('非交易时间只拦截最终提交，普通下单快照与改单参数�
   assert.equal(amendEvents.filter(([event]) => event === 'error').at(-1)[1], '当前非交易时间，不可进行操作。')
   scope.stop()
 })
+
+test('金额改单接受非千元整数，保留小数金额并继续执行业务校验', async () => {
+  const scope = vue.effectScope(), events = []
+  const symbol = { ...a, code: '002594', name: '比亚迪', price: 245.8 }
+  const props = vue.reactive({ symbol, account, brokerAccounts: [], order: { ...symbol, id: 'amount', type: 'limit', side: 'sell', quantity: 1200, inputAmount: 294960, price: 245.8, filledQuantity: 0 } })
+  const form = scope.run(() => setup('./components/AmendOrderDialog.vue', props, events))
+  form.displayedAmount.value = 294969.23; await vue.nextTick()
+  assert.equal(form.canSubmit.value, true)
+  assert.equal(form.nextQuantity.value, 1200)
+  form.submit()
+  const payload = events.find(([name]) => name === 'submit')[1]
+  assert.equal(payload.inputAmount, 294969.23)
+  assert.equal(payload.quantity, 1200)
+  form.displayedAmount.value = 0; await vue.nextTick()
+  assert.equal(form.canSubmit.value, false)
+  scope.stop()
+})

@@ -184,7 +184,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
       </OrderContextOverview>
     </template>
     <template #order>
-      <form class="order-form amend-order-form" @submit.prevent="submit">
+      <form class="order-form amend-order-form" novalidate @submit.prevent="submit">
         <section class="order-context-block">
           <div class="order-account-block"><div class="field-caption"><span>下单账户</span></div><div class="amend-readonly" :title="order.accountLabel || (account?.id || order.account) + ' - ' + (account?.name || '')">{{ order.accountLabel || (account?.id || order.account) + ' - ' + (account?.name || '') }}</div></div>
         </section>
