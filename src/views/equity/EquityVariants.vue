@@ -17,7 +17,7 @@ import TradingAppShell from '../../layout/TradingAppShell.vue'
 import HeaderTransactionNotice from '../../layout/HeaderTransactionNotice.vue'
 import { tradingContextKey } from './tradingContext'
 import EquityTradingPage from './pages/EquityTradingPage.vue'
-import OptionsTradingPage from './pages/OptionsTradingPage.vue'
+import OptionsTradingPage from '../options/OptionsTradingPage.vue'
 import FinancingPage from './pages/FinancingPage.vue'
 import StrategyTradingPage from './pages/StrategyTradingPage.vue'
 import DataPage from '../data/DataPage.vue'
@@ -1046,11 +1046,11 @@ provide(tradingContextKey, recordTableContext)
     <template #notifications>
       <HeaderTransactionNotice :notice="latestTransactionNotice" :count="transactionToasts.length" @open-messages="messageCategory = '消息'; openMessageCenter()" />
     </template>
-    <OptionsTradingPage v-if="activeNav === '期权交易'" />
-    <FinancingPage v-else-if="activeNav === '融资申请'" />
-    <StrategyTradingPage v-else-if="activeNav === '策略交易'" />
-    <EquityTradingPage v-else-if="activeNav !== '数据'" />
-    <KeepAlive><DataPage v-if="activeNav === '数据'" :accounts="accounts" :context="recordTableContext" /></KeepAlive>
+    <KeepAlive><OptionsTradingPage :context="recordTableContext" key="options" v-if="activeNav === '期权交易'" :paused="!systemRunning" :download-csv="downloadCsv" />
+    <FinancingPage key="financing" v-else-if="activeNav === '融资申请'" />
+    <StrategyTradingPage key="strategy" v-else-if="activeNav === '策略交易'" />
+    <EquityTradingPage key="equity" v-else-if="activeNav !== '数据'" />
+    <DataPage key="data" v-else-if="activeNav === '数据'" :accounts="accounts" :context="recordTableContext" /></KeepAlive>
     <BaseDialog v-model="messageCenterVisible" width="760px" align-center class="message-center-dialog" :show-close="false">
       <template #header><header class="message-center-header"><h2>消息中心</h2><div class="message-header-actions"><button type="button" class="message-close-action" aria-label="关闭消息中心" @click="messageCenterVisible=false"><el-icon><Close /></el-icon></button></div></header></template>
       <div class="message-center-layout"><nav class="message-category-tabs" aria-label="消息分类"><button v-for="category in messageCategories" :key="category" :class="{ active: messageCategory === category }" @click="messageCategory=category"><img class="message-category-icon" :src="messageIcon(category)" alt=""><span>{{ category }}</span><i v-if="categoryUnreadCount(category)">{{ categoryUnreadCount(category) }}</i></button></nav>
