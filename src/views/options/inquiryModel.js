@@ -26,8 +26,14 @@ export const instruments = [
   { code: '000905', name: '中证500指数', market: 'SH', currency: 'CNY' },
 ]
 
+export const inquiryStatusLabels = { pending: '询价中…', empty: '暂无报价', expired: '报价已失效', quoted: '报价成功' }
+
 export function defaultDraft() {
-  return { code: '000001', direction: 'call', size: 500, tenors: ['1M'], strikes: [100], knockout: '无要求', exercise: 'T+1', dividend: '无要求', currency: 'CNY' }
+  return { code: '000001', direction: 'call', size: 500, tenors: ['1M'], strikes: [100], knockout: '无要求', exercise: '无要求', dividend: '无要求', currency: 'CNY' }
+}
+
+export function createInquiryFormDraft() {
+  return { ...defaultDraft(), code: '', size: null, tenors: [], strikes: [] }
 }
 
 function dateOf(value = new Date()) {
@@ -84,7 +90,7 @@ export function buildInquiryItems(draft, catalog = instruments, now = new Date()
 function inventoryFor(item) {
   const standard = ['1M', '2M', '3M', '6M'].includes(item.tenor)
     && [80, 90, 95, 100, 103, 105].includes(item.strike)
-    && item.exercise === 'T+1'
+    && ['T+1', '无要求'].includes(item.exercise)
     && ['无要求', '连板敲出', '主3创2', '3连板', '协商敲出'].includes(item.knockout)
     && ['无要求', '分红调整', '分红不调整', '分红调整初价'].includes(item.dividend)
     && ['CNY', instruments.find((instrument) => instrument.code === item.code)?.currency].includes(item.currency)
@@ -109,7 +115,7 @@ function rateFor(item) {
 }
 
 function groupKey(item) {
-  return [item.account || 'TZS_T0', item.code, item.direction, item.strike, item.tenor, item.currency, item.size].join(':')
+  return [item.account || 'TZS_T0', item.code, item.direction, item.strike, item.tenor, item.currency, item.size, item.inquiryRound || ''].join(':')
 }
 
 export function markBestQuotes(items) {
@@ -166,14 +172,23 @@ export function quoteIsBest(item, quote) {
 export function createInitialInquiries(now = new Date()) {
   const stamp = dateOf(now).getTime()
   const make = (draft, minutesAgo) => buildInquiryItems({ ...defaultDraft(), ...draft }, instruments, new Date(stamp - minutesAgo * 60000))
+  // 演示时间穿插有报价与无报价状态，仍由真实的更新时间排序规则展示。
   const seed = [
-    ...resolveInquiryBatch(make({ code: 'HSCEI', size: 500, tenors: ['1M', '2M'] }, 12), new Date(stamp - 11 * 60000)),
-    ...resolveInquiryBatch(make({ code: '00700', size: 1000, tenors: ['1M'], strikes: [100] }, 8), new Date(stamp - 7 * 60000)),
-    ...resolveInquiryBatch(make({ code: '000002', size: 500, strikes: [100, 103] }, 5), new Date(stamp - 4 * 60000)),
+    ...resolveInquiryBatch(make({ code: '00700', size: 1000, tenors: ['1M'], strikes: [100] }, 2), new Date(stamp - 1 * 60000)),
+    ...make({ code: '600030', tenors: ['1M', '2M'] }, 3),
+    ...resolveInquiryBatch(make({ code: 'HSCEI', size: 500, tenors: ['1M', '2M'] }, 6), new Date(stamp - 5 * 60000)),
+    ...make({ code: '600036', tenors: ['1M', '2M'] }, 7).map(item => ({ ...item, status: 'empty' })),
+    ...resolveInquiryBatch(make({ code: '000002', size: 500, strikes: [100, 103] }, 10), new Date(stamp - 9 * 60000)),
+    ...make({ code: '600570', tenors: ['1M', '2M'] }, 11).map(item => ({ ...item, status: 'expired' })),
   ]
   return markBestQuotes(seed)
 }
 
 export function calculateOptionFee(principal, rate) {
   return Math.round(Number(principal) * 10000 * Number(rate)) / 100
+}
+
+// 同一个筛选项多选取并集，各参数仍由调用方组合为交集。
+export function matchesInquiryFilter(value, selected) {
+  return !selected?.length || selected.includes(value)
 }

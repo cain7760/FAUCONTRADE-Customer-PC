@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildInquiryItems, calculateOptionFee, canAutoQuoteBatch, createInitialInquiries, defaultDraft, markBestQuotes, quoteIsBest, resolveInquiryBatch, validateInquiry } from './inquiryModel.js'
+import { buildInquiryItems, calculateOptionFee, canAutoQuoteBatch, createInitialInquiries, createInquiryFormDraft, defaultDraft, markBestQuotes, matchesInquiryFilter, quoteIsBest, resolveInquiryBatch, validateInquiry } from './inquiryModel.js'
 import { useOptionsInquiry } from './useOptionsInquiry.js'
 
 test('inquiry validation enforces independent selection limits and strike bounds', () => {
@@ -132,12 +132,22 @@ test('customer flow resolves together, rejects duplicate pending requests, and c
   assert.equal(order.account, 'TZS_T1')
   assert.equal(order.optionFee, calculateOptionFee(500, quote.rate))
   assert.equal(useOptionsInquiry().openingOrders.value[0].id, order.id)
-  store.reinquire([item.id])
-  assert.throws(() => store.placeOrder({ item, quote, entryMode: 'limit', principal: 500 }), /当前报价不可下单/)
+  const beforeReinquiry = JSON.stringify(store.items.value.find(entry => entry.id === item.id))
+  const countBeforeReinquiry = store.items.value.length
+  const [pending] = store.reinquire([item.id])
+  assert.notEqual(pending.id, item.id)
+  assert.equal(pending.sourceInquiryId, item.id)
+  assert.equal(pending.status, 'pending')
+  assert.equal(store.items.value.length, countBeforeReinquiry + 1)
+  assert.equal(JSON.stringify(store.items.value.find(entry => entry.id === item.id)), beforeReinquiry)
   context.mock.timers.tick(1200)
-  const refreshed = store.items.value.find((entry) => entry.id === item.id)
+  const refreshed = store.items.value.find((entry) => entry.id === pending.id)
   assert.equal(refreshed.status, 'quoted')
   assert.equal(refreshed.quotes[0].previousRate, quote.rate)
+  assert.equal(JSON.stringify(store.items.value.find(entry => entry.id === item.id)), beforeReinquiry)
+  const next = store.reinquire([item.id, refreshed.id])
+  assert.equal(next.length, 1, 're-inquiry must not multiply duplicate historical conditions')
+  context.mock.timers.tick(1200)
 })
 
 test('bulk inquiries are atomic when a later instrument is pending, invalid, or duplicated', (context) => {
@@ -165,4 +175,60 @@ test('bulk inquiries are atomic when a later instrument is pending, invalid, or 
   assert.ok(feedback.every((item) => item.status === 'quoted'))
   assert.ok(feedback[0].quotes.length > 1, 'another instrument requiring manual feedback must not change this instrument response group')
   assert.equal(feedback[1].quotes.length, 1)
+})
+
+test('multi-selection filters match any chosen value and allow empty selections', () => {
+  assert.equal(matchesInquiryFilter('1M', []), true)
+  assert.equal(matchesInquiryFilter('2M', ['1M', '2M']), true)
+  assert.equal(matchesInquiryFilter('3M', ['1M', '2M']), false)
+})
+
+test('inquiry defaults and reset source leave all three trading rules unrestricted', () => {
+  const draft = defaultDraft()
+  assert.deepEqual([draft.knockout, draft.exercise, draft.dividend], ['无要求','无要求','无要求'])
+  assert.equal(canAutoQuoteBatch(buildInquiryItems(draft)), true)
+})
+
+test('seed has entire instruments pending, unavailable and expired', () => {
+  const initial = createInitialInquiries('2026-11-06T03:00:00Z')
+  for (const [code, status] of [['600030','pending'],['600036','empty'],['600570','expired']]) {
+    const group = initial.filter(item => item.code === code)
+    assert.equal(group.length, 2)
+    assert.ok(group.every(item => item.status === status && item.quotes.length === 0))
+  }
+})
+
+test('re-inquiry expires old unquoted rows for the whole instrument and ignores stale responses', (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] })
+  const store = useOptionsInquiry(), previous = store.items.value
+  context.after(() => { store.items.value = previous })
+  const draft = { ...defaultDraft(), code: '600519', account: 'REQUERY_EXPIRY_TEST' }
+  const [pending] = store.submitInquiry(draft)
+  context.mock.timers.tick(600)
+  const quoted = resolveInquiryBatch(buildInquiryItems({ ...draft, tenors: ['2M'] }))[0]
+  const empty = { ...buildInquiryItems({ ...draft, tenors: ['3M'] })[0], status: 'empty' }
+  const unrelated = { ...empty, id: 'unrelated', code: '600036' }
+  store.items.value = [...store.items.value, quoted, empty, unrelated]
+  const quotedBefore = JSON.stringify(quoted)
+  const [added] = store.reinquire([pending.id])
+  assert.notEqual(added.id, pending.id)
+  assert.equal(added.status, 'pending')
+  for (const id of [pending.id,empty.id]) assert.equal(store.items.value.find(item => item.id === id).status, 'expired')
+  assert.equal(store.items.value.find(item => item.id === unrelated.id).status, 'empty')
+  assert.equal(JSON.stringify(store.items.value.find(item => item.id === quoted.id)), quotedBefore)
+  context.mock.timers.tick(600) // The old request finishes, but cannot revive its expired record.
+  assert.equal(store.items.value.find(item => item.id === pending.id).status, 'expired')
+  assert.equal(store.items.value.find(item => item.id === added.id).status, 'pending')
+  context.mock.timers.tick(600)
+  assert.equal(store.items.value.find(item => item.id === added.id).status, 'quoted')
+  assert.equal(store.items.value.find(item => item.id === pending.id).status, 'expired')
+  assert.equal(store.items.value.find(item => item.id === empty.id).status, 'expired')
+})
+
+test('inquiry form starts with empty required selections and unrestricted default rules', () => {
+  const draft = createInquiryFormDraft()
+  assert.deepEqual({ code:draft.code, size:draft.size, tenors:draft.tenors, strikes:draft.strikes }, { code:'', size:null, tenors:[], strikes:[] })
+  assert.deepEqual([draft.knockout,draft.exercise,draft.dividend,draft.currency], ['无要求','无要求','无要求','CNY'])
+  draft.tenors.push('1M')
+  assert.deepEqual(createInquiryFormDraft().tenors, [])
 })

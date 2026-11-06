@@ -11,7 +11,7 @@ function finishBatch(batch) {
   const ids = new Set(batch.map((item) => item.id))
   setTimeout(() => {
     const resolved = new Map(resolveInquiryBatch(batch).map((item) => [item.id, item]))
-    items.value = markBestQuotes(items.value.map((item) => resolved.get(item.id) || item))
+    items.value = markBestQuotes(items.value.map((item) => item.status === 'pending' ? resolved.get(item.id) || item : item))
     ids.forEach((id) => pendingRequests.delete(id))
   }, 1200)
 }
@@ -56,14 +56,30 @@ function submitInquiry(draft) {
 
 function reinquire(itemIds) {
   const requested = new Set(itemIds)
-  const batch = items.value.filter((item) => requested.has(item.id) && item.status !== 'pending' && !pendingRequests.has(item.id))
+  const batch = items.value.filter((item) => requested.has(item.id))
   if (!batch.length) throw new Error('请选择可重询的记录')
-  const ids = new Set(batch.map((item) => item.id))
-  const createdAt = new Date().toISOString()
-  batch.forEach((item) => pendingRequests.add(item.id))
-  items.value = markBestQuotes(items.value.map((item) => ids.has(item.id) ? { ...item, status: 'pending', createdAt } : item))
-  finishBatch(batch.map((item) => ({ ...item, createdAt })))
-  return batch
+  const unique = new Map()
+  for (const item of [...batch].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))) {
+    const key = signature(item)
+    if (!unique.has(key)) unique.set(key, item)
+  }
+  const createdAt = new Date().toISOString(), request = ++sequence
+  const inquiryRound = `REQUOTE-${Date.now()}-${request}`
+  const refreshed = [...unique.values()].map(item => ({
+    ...item, id: `${item.id}-R${request}`, batchId: `${item.batchId}-R${request}`,
+    inquiryRound, sourceInquiryId: item.id, status: 'pending', createdAt,
+    quotes: item.quotes.map(quote => ({ ...quote })),
+  }))
+  refreshed.forEach(item => pendingRequests.add(item.id))
+  const codes = new Set(batch.map(item => item.code))
+  const previous = items.value.map(item => {
+    if (!codes.has(item.code) || !['pending', 'empty'].includes(item.status)) return item
+    pendingRequests.delete(item.id)
+    return { ...item, status: 'expired', expiredAt: createdAt }
+  })
+  items.value = markBestQuotes([...refreshed, ...previous])
+  finishBatch(refreshed)
+  return refreshed
 }
 
 function placeOrder({ item, quote, entryMode, principal, remark = '' }) {

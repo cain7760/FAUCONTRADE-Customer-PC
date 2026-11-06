@@ -65,3 +65,16 @@ test('平仓与改单共用信息摘要及左栏行情布局，平仓保留四�
   for (const label of ['持仓股数(股)', '持仓市值(CNY)', '可平股数(股)', '持仓均价(CNY)']) assert.ok(close.includes(label))
   assert.ok(read('../equity/components/PositionOrderDialog.vue').includes("'has-market-overview': marketOverview"))
 })
+
+
+test('权益与期权标的选择共用搜索历史组件，保留回选和单条删除', () => {
+  for (const path of ['../equity/components/OrderTicket.vue', '../options/OptionInquiryForm.vue']) {
+    const source = read(path)
+    assert.ok(source.includes('InstrumentSearchHistory.vue'))
+    assert.match(source, /<InstrumentSearchHistory :items="recentSymbols" @select="chooseRecentSymbol" @remove="removeRecentSymbol"/)
+  }
+  const history = read('../../components/trading/InstrumentSearchHistory.vue')
+  assert.ok(history.includes('instrument-history-chip'))
+  assert.ok(history.includes("$emit('select', item.code)"))
+  assert.ok(history.includes("$emit('remove', item.code)"))
+})
