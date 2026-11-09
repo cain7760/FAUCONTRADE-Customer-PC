@@ -1,14 +1,24 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { ArrowDown, ArrowUp, Search } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowUp, Search, Tickets } from '@element-plus/icons-vue'
 import InstrumentSearchHistory from '../../components/trading/InstrumentSearchHistory.vue'
 import { createInquiryFormDraft, instruments, validateInquiry } from './inquiryModel.js'
 const props = defineProps({ paused: Boolean })
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['submit', 'batch'])
 const draft = reactive(createInquiryFormDraft())
 const codes = ref([]), advanced = ref(false)
 const errors = reactive({})
 const instrumentInput = ref(null)
+const ticketRoot = ref(null)
+const selectedTagTooltip = computed(() => ({
+  appendTo: ticketRoot.value || undefined,
+  popperClass: 'variant-popper option-selected-instruments',
+  placement: 'bottom-end',
+  popperOptions: { modifiers: [
+    { name: 'preventOverflow', options: { boundary: ticketRoot.value, padding: 14 } },
+    { name: 'flip', options: { boundary: ticketRoot.value, padding: 14, fallbackPlacements: ['top-end'] } },
+  ] },
+}))
 const instrumentLabel = item => `${item.name}（${item.code}）`
 const instrumentSearch = ref('')
 const recentCodes = ref([]), visibleRecentCodes = ref([])
@@ -109,13 +119,13 @@ const rules = [
 </script>
 
 <template>
-  <section class="option-inquiry-ticket" aria-label="期权询价面板">
-    <header class="option-ticket-heading"><strong>期权询价</strong><el-button link disabled>批量询价</el-button></header>
+  <section ref="ticketRoot" class="option-inquiry-ticket" aria-label="期权询价面板">
+    <header class="option-ticket-heading"><strong>期权询价</strong><el-button link :icon="Tickets" :disabled="paused" @click="emit('batch')">批量询价</el-button></header>
     <form class="option-inquiry-body" novalidate @submit.prevent="submit">
       <div class="inquiry-field inquiry-direction-field"><span>期权方向</span><span class="inquiry-direction-tag">看涨</span></div>
       <div class="inquiry-field">
         <label for="option-instrument">选择标的</label>
-        <el-select id="option-instrument" ref="instrumentInput" :model-value="codes" multiple filterable clearable collapse-tags collapse-tags-tooltip :max-collapse-tags="1" :fit-input-width="true"
+        <el-select id="option-instrument" ref="instrumentInput" :model-value="codes" multiple filterable clearable collapse-tags collapse-tags-tooltip :max-collapse-tags="1" :fit-input-width="true" :tag-tooltip="selectedTagTooltip"
           :filter-method="value => instrumentSearch = value" :reserve-keyword="false"
           class="instrument-select inquiry-instrument-select" placeholder="输入标的代码或名称" aria-label="询价标的"
           popper-class="variant-popper instrument-popper option-instrument-suggestions" placement="bottom-start" :offset="4"
@@ -126,9 +136,9 @@ const rules = [
         </el-select>
         <p v-if="errors.instrument" class="inquiry-error" role="alert">{{ errors.instrument }}</p>
       </div>
-      <div class="inquiry-field"><label>询价规模（万）</label><div class="inquiry-choices wraps"><button v-for="size in sizeOptions" :key="size" type="button" :class="{ selected: !customSizeSelected && draft.size === size }" @click="draft.size = size; customSizeSelected = false; customSizeEditing = false; errors.size = ''">{{ size.toLocaleString() }}</button><el-input v-model="customSize" class="inquiry-size-input" :class="{ selected: customSizeSelected && !errors.size }" @focus="customSizeEditing = true" @input="customSizeEditing = true" inputmode="numeric" placeholder="自定义" aria-label="自定义询价规模" @blur="addSize" @keydown.enter.prevent="addSize" /></div><p v-if="errors.size" class="inquiry-error" role="alert">{{ errors.size }}</p></div>
-      <div class="inquiry-field"><label>期限 <span>最多 4 个 · 已选 {{ draft.tenors.length }}/4</span></label><div class="inquiry-choices wraps"><button v-for="tenor in tenorOptions" :key="tenor" type="button" :class="{ selected: draft.tenors.includes(tenor) }" @click="toggle('tenors', tenor, 4)">{{ tenor }}</button><el-input v-model="customTenor" placeholder="自定义" title="输入月数或 M 期限，不超过 99M" aria-label="自定义期限" @blur="addTenor" @keydown.enter.prevent="addTenor" /></div><p v-if="errors.tenors" class="inquiry-error" role="alert">{{ errors.tenors }}</p></div>
-      <div class="inquiry-field"><label>执行价<span>70–120 · 已选 {{ draft.strikes.length }}/3</span></label><div class="inquiry-choices wraps"><button v-for="strike in strikeOptions" :key="strike" type="button" :class="{ selected: draft.strikes.includes(strike) }" @click="toggle('strikes', strike, 3)">{{ strike }}</button><el-input v-model="customStrike" inputmode="decimal" placeholder="自定义" title="输入执行价，70–120" aria-label="自定义执行价" @blur="addStrike" @keydown.enter.prevent="addStrike" /></div><p v-if="errors.strikes" class="inquiry-error" role="alert">{{ errors.strikes }}</p></div>
+      <div class="inquiry-field"><label>询价规模（万）</label><div class="inquiry-choices wraps inquiry-numeric-choices"><button v-for="size in sizeOptions" :key="size" type="button" :class="{ selected: !customSizeSelected && draft.size === size }" @click="draft.size = size; customSizeSelected = false; customSizeEditing = false; errors.size = ''">{{ size.toLocaleString() }}</button><el-input v-model="customSize" class="inquiry-size-input" :class="{ selected: customSizeSelected && !errors.size }" @focus="customSizeEditing = true" @input="customSizeEditing = true" inputmode="numeric" placeholder="自定义" aria-label="自定义询价规模" @blur="addSize" @keydown.enter.prevent="addSize" /></div><p v-if="errors.size" class="inquiry-error" role="alert">{{ errors.size }}</p></div>
+      <div class="inquiry-field"><label>期限 <span>最多 4 个 · 已选 {{ draft.tenors.length }}/4</span></label><div class="inquiry-choices wraps inquiry-numeric-choices"><button v-for="tenor in tenorOptions" :key="tenor" type="button" :class="{ selected: draft.tenors.includes(tenor) }" @click="toggle('tenors', tenor, 4)">{{ tenor }}</button><el-input v-model="customTenor" placeholder="自定义" title="输入月数或 M 期限，不超过 99M" aria-label="自定义期限" @blur="addTenor" @keydown.enter.prevent="addTenor" /></div><p v-if="errors.tenors" class="inquiry-error" role="alert">{{ errors.tenors }}</p></div>
+      <div class="inquiry-field"><label>执行价<span>70–120 · 已选 {{ draft.strikes.length }}/3</span></label><div class="inquiry-choices wraps inquiry-numeric-choices"><button v-for="strike in strikeOptions" :key="strike" type="button" :class="{ selected: draft.strikes.includes(strike) }" @click="toggle('strikes', strike, 3)">{{ strike }}</button><el-input v-model="customStrike" inputmode="decimal" placeholder="自定义" title="输入执行价，70–120" aria-label="自定义执行价" @blur="addStrike" @keydown.enter.prevent="addStrike" /></div><p v-if="errors.strikes" class="inquiry-error" role="alert">{{ errors.strikes }}</p></div>
       <div v-for="rule in rules" :key="rule.key" class="inquiry-field"><label>{{ rule.label }}</label><div class="inquiry-choices"><button v-for="value in rule.options" :key="value" type="button" :class="{ selected: draft[rule.key] === value }" @click="draft[rule.key] = value; errors[rule.key] = ''">{{ value }}</button></div><p v-if="errors[rule.key]" class="inquiry-error" role="alert">{{ errors[rule.key] }}</p></div>
       <button class="inquiry-advanced" type="button" :aria-expanded="advanced" @click="advanced = !advanced">高级选项<span>结算币种 {{ draft.currency }} <el-icon><ArrowUp v-if="advanced"/><ArrowDown v-else/></el-icon></span></button>
       <div v-if="advanced" class="inquiry-field"><label>结算币种</label><div class="inquiry-choices" role="group" aria-label="结算币种"><button v-for="currency in ['CNY', 'HKD', 'USD']" :key="currency" type="button" :class="{selected:draft.currency === currency}" :aria-pressed="draft.currency === currency" @click="draft.currency = currency; currencyChanged = true; errors.currency = ''">{{ currency }}</button></div><p v-if="errors.currency" class="inquiry-error" role="alert">{{ errors.currency }}</p></div>
@@ -149,6 +159,7 @@ const rules = [
 .inquiry-instrument-select :deep(.el-select__selected-item),.inquiry-instrument-select :deep(.el-select__input){font-size:14px}
 .inquiry-instrument-select :deep(.el-tag){--el-tag-bg-color:#303840;--el-tag-border-color:#53606d;--el-tag-text-color:#d9e3ec}
 .inquiry-instrument-select :deep(.el-tag__close){color:#aeb6c1}
+.inquiry-instrument-select :deep(.el-tag:hover .el-select__tags-text){color:var(--el-color-primary)}
 .inquiry-instrument-select :deep(.el-select__selection){min-width:0}
 .instrument-clear{display:grid;place-items:center;padding:0;border:0;background:none;color:var(--el-text-color-secondary);cursor:pointer}
 .instrument-clear:hover{color:var(--el-text-color-primary)}
@@ -157,6 +168,13 @@ const rules = [
 </style>
 
 <style>
+.option-inquiry-ticket{position:relative}
+.option-selected-instruments.el-popper{box-sizing:border-box;width:calc(100% - 28px);max-width:400px;padding:8px;background:#25282d;border-color:#454c57}
+.option-selected-instruments .el-select__selection{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto}
+.option-selected-instruments .el-select__selected-item{max-width:100%;min-width:0}
+.option-selected-instruments .el-tag{max-width:100%;--el-tag-bg-color:#303840;--el-tag-border-color:#53606d;--el-tag-text-color:#d9e3ec}
+.option-selected-instruments .el-select__tags-text{white-space:normal;overflow-wrap:anywhere}
+.option-selected-instruments .el-tag:hover .el-select__tags-text{color:var(--el-color-primary)}
 .option-instrument-suggestions .el-autocomplete-suggestion{background:#25282d;color:#c9ced6}
 .option-instrument-suggestions .el-autocomplete-suggestion li:hover,.option-instrument-suggestions .el-autocomplete-suggestion li.highlighted{background:#353026;color:#e3c269}
 </style>

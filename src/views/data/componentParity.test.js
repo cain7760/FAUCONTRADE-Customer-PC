@@ -3,6 +3,32 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 
+test('权益与期权共用底部系统状态及交易时间开关，展示模式仅在期权提供', () => {
+  for (const path of ['../equity/pages/EquityTradingPage.vue', '../options/OptionsTradingPage.vue']) {
+    const source = read(path)
+    assert.ok(source.includes('components/trading/TradingStatusBar.vue'))
+    assert.match(source, /<TradingStatusBar[^>]+@toggle-system="toggleSystemStatus"[^>]+@update:tradingTimeMode="setTradingTimeMode"/)
+  }
+  assert.ok(read('../options/OptionsTradingPage.vue').includes('aria-label="期权展示模式"'))
+  assert.ok(!read('../equity/pages/EquityTradingPage.vue').includes('期权展示模式'))
+})
+
+test('权益下单确认与批量询价复用同一弹窗操作按钮组件', () => {
+  for (const path of ['../equity/components/OrderTicket.vue', '../options/BatchInquiryDialog.vue']) {
+    const source = read(path)
+    assert.ok(source.includes('components/DialogActions.vue'))
+    assert.match(source, /<template #footer><DialogActions[^>]+@cancel="[^"]+"[^>]+@confirm="submit"/)
+  }
+})
+
+test('批量重询与文件上传复用同一描边操作按钮组件', () => {
+  for (const path of ['../options/OptionsTradingPage.vue', '../options/BatchInquiryDialog.vue']) {
+    const source = read(path)
+    assert.ok(source.includes('components/OutlineActionButton.vue'))
+    assert.match(source, /<OutlineActionButton[^>]+:disabled=/)
+  }
+})
+
 test('当日与历史实际使用同一套筛选及表格组件，历史页不另造样式和排序', () => {
   for (const [adapter, shared] of [['OrdersTable.vue', 'OrderRecords.vue'], ['TradesTable.vue', 'TradeRecords.vue']]) {
     assert.ok(read('../equity/components/' + adapter).includes('../../../components/trading/' + shared))
@@ -12,7 +38,8 @@ test('当日与历史实际使用同一套筛选及表格组件，历史页不�
     assert.ok(component.includes('class="filter-query"'))
     assert.ok(component.includes('ColumnConfigPopover'))
     assert.ok(component.includes('historical'))
-    assert.ok(component.includes('v-if="!historical" label="历史"'))
+    if (shared === 'OrderRecords.vue') assert.ok(component.includes('v-if="!historical" label="历史"'))
+    else assert.doesNotMatch(component, /label="历史"|class-name="history-column"/)
   }
   const page = read('./DataPage.vue')
   assert.doesNotMatch(page, /<el-table\s|<table\s|<thead|history-status--|order-fill-progress-track/)
@@ -25,6 +52,13 @@ test('当日与历史实际使用同一套筛选及表格组件，历史页不�
   assert.match(order, /v-if="!historical" label="操作" width="96"/)
   assert.ok(order.includes('role="progressbar"'))
   assert.ok(order.includes('orderStatusVisual(row.status)'))
+})
+
+test('持仓与成交表不再提供历史列，订单表保留历史入口', () => {
+  for (const path of ['../equity/components/PositionsTable.vue', '../../components/trading/TradeRecords.vue']) {
+    assert.doesNotMatch(read(path), /label="历史"|class-name="history-column"|openOrderHistory/)
+  }
+  assert.match(read('../../components/trading/OrderRecords.vue'), /label="历史"/)
 })
 
 test('转手工仅允许运行中系统的异常系统单，所有其他状态及手工单拒绝', () => {
@@ -64,6 +98,20 @@ test('平仓与改单共用信息摘要及左栏行情布局，平仓保留四�
   const close = read('../equity/components/ClosePositionDialog.vue')
   for (const label of ['持仓股数(股)', '持仓市值(CNY)', '可平股数(股)', '持仓均价(CNY)']) assert.ok(close.includes(label))
   assert.ok(read('../equity/components/PositionOrderDialog.vue').includes("'has-market-overview': marketOverview"))
+})
+
+
+test('期权与权益共用资产概要的展示及隐藏交互', () => {
+  for (const path of ['../options/OptionOrderTicket.vue','../equity/pages/EquityTradingPage.vue']) {
+    const source = read(path)
+    assert.ok(source.includes('<TradingAssetSummary'))
+    assert.ok(source.includes('@toggle-visibility="toggleAssetsVisible"'))
+    assert.ok(source.includes('@update:collapsed="assetsCollapsed=$event"'))
+  }
+  const summary = read('../../components/trading/TradingAssetSummary.vue')
+  assert.ok(summary.includes('assetAmountParts'))
+  assert.ok(summary.includes('assetsVisible'))
+  assert.ok(summary.includes('assetsCollapsed'))
 })
 
 

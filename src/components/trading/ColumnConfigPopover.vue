@@ -60,7 +60,7 @@ function dragEnd() { draggingKey.value = null }
 </script>
 
 <template>
-  <el-popover v-model:visible="visible" placement="bottom-end" :width="266" trigger="click" popper-class="column-config-popper" @show="beginEdit">
+  <el-popover v-model:visible="visible" placement="bottom-end" :show-arrow="false" :width="266" trigger="click" popper-class="column-config-popper" @show="beginEdit">
     <template #reference><button class="column-config-trigger" aria-label="自定义列"><img :src="settingsIconUrl" alt=""></button></template>
     <section class="column-config-dialog" aria-label="自定义列设置">
       <header><b>自定义列设置</b><button type="button" @click="restoreDefaults">恢复默认</button></header>

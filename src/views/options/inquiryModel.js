@@ -27,6 +27,9 @@ export const instruments = [
 ]
 
 export const inquiryStatusLabels = { pending: '询价中…', empty: '暂无报价', expired: '报价已失效', quoted: '报价成功' }
+export function inquiryStatusLabel(item) {
+  return item.status === 'pending' && item.sourceInquiryId ? '重询中…' : inquiryStatusLabels[item.status]
+}
 
 export function defaultDraft() {
   return { code: '000001', direction: 'call', size: 500, tenors: ['1M'], strikes: [100], knockout: '无要求', exercise: '无要求', dividend: '无要求', currency: 'CNY' }
@@ -114,8 +117,12 @@ function rateFor(item) {
   return Math.max(0.1, base + (period - 1) * 0.75 + strikeEffect)
 }
 
+export function inquiryRoundKey(item) {
+  return `${item.code}:${item.inquiryRound || item.batchId}`
+}
+
 function groupKey(item) {
-  return [item.account || 'TZS_T0', item.code, item.direction, item.strike, item.tenor, item.currency, item.size, item.inquiryRound || ''].join(':')
+  return [item.account || 'TZS_T0', inquiryRoundKey(item), item.direction, item.strike, item.tenor, item.currency, item.size].join(':')
 }
 
 export function markBestQuotes(items) {
@@ -144,7 +151,7 @@ export function resolveInquiryBatch(items, now = new Date()) {
     const manual = [{ capacity: item.size, knockout: item.knockout === '无要求' ? '协商敲出' : item.knockout, dividend: item.dividend === '无要求' ? '分红调整' : item.dividend, spread: 0.45 }]
     const candidates = unavailable ? [] : auto ? matching : manual
     const quotes = candidates.map((quote, index) => {
-      const previous = item.quotes[index]
+      const previous = (item.previousQuotes || item.quotes)[index]
       const rate = Math.round((rateFor(item) + quote.spread) * 100) / 100
       return {
         id: `${item.id}-Q${index + 1}`,

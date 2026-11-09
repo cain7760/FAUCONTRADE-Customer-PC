@@ -1,6 +1,7 @@
 <script setup>
 import { inject } from 'vue'
 import TradingAssetSummary from '../../../components/trading/TradingAssetSummary.vue'
+import TradingStatusBar from '../../../components/trading/TradingStatusBar.vue'
 import { ArrowDownBold, Search, View, Hide, Close } from '@element-plus/icons-vue'
 import { accounts } from '../fixtures'
 import { marketInstruments, money, signedMoney, number, price as formatPrice } from '../variantData'
@@ -51,7 +52,7 @@ const {
       </section>
       <div v-if="dragging" class="dock-targets"><div class="dock-target target-left">停靠左侧</div><div class="dock-target target-right">停靠右侧</div><div class="dock-target target-bottom">停靠底部</div><span class="float-instruction">拖至边缘停靠 · 放在中间悬浮</span></div>
     </div>
-    <footer class="variant-status"><span class="system-status"><i class="status-dot" :class="{ 'is-interrupted': !systemRunning }"/>{{ systemRunning ? '运行中' : '系统中断' }} · 演示环境<button type="button" class="system-status-toggle" @click="toggleSystemStatus">{{ systemRunning ? '切换为中断' : '恢复运行' }}</button><span class="demo-trading-time" role="group" aria-label="演示交易时间"><button type="button" class="system-status-toggle" :aria-pressed="tradingTimeMode === 'trading'" @click="setTradingTimeMode('trading')">交易时间</button><button type="button" class="system-status-toggle" :aria-pressed="tradingTimeMode === 'non-trading'" @click="setTradingTimeMode('non-trading')">非交易时间</button></span></span><span>行情：静态快照</span><span class="status-end">系统版本：方案 V0.2</span></footer>
+    <TradingStatusBar :system-running="systemRunning" :trading-time-mode="tradingTimeMode" @toggle-system="toggleSystemStatus" @update:tradingTimeMode="setTradingTimeMode" />
     <ClosePositionDialog v-model="closePositionVisible" :position="closingPosition" :account="closingAccount" :paused="!systemRunning" @submit="acceptClosePosition" />
     <ChaseOrderDialog :paused="!systemRunning" v-model="chaseOrderVisible" :position="chasingPosition" :order="chasingOrder" :account="chasingAccount" @submit="acceptChaseOrder" />
     <AmendOrderDialog v-model="amendOrderVisible" :order="amendingOrder" :symbol="amendingSymbol" :account="amendingAccount" @submit="acceptAmendOrder" />
@@ -101,9 +102,3 @@ const {
       <template #footer><el-button @click="cancelOrderVisible=false">取消[Esc]</el-button><el-button type="primary" @click="confirmCancelOrder">确认撤单[Enter]</el-button></template>
     </BaseDialog>
 </template>
-
-<style scoped>
-.demo-trading-time { display: inline-flex; align-items: center; gap: 8px; margin-left: 12px; }
-.variants-app .demo-trading-time .system-status-toggle { margin-left: 0; padding: 0 4px; background: transparent; color: #8e949e; }
-.variants-app .demo-trading-time button[aria-pressed="true"] { color: #bb984a; }
-</style>

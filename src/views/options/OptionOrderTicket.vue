@@ -92,8 +92,8 @@ function submitOrder() {
         </div>
         <dl class="option-terms">
           <div><dt>期限</dt><dd>{{ item.tenor }}</dd></div>
-          <div><dt>规模</dt><dd>{{ number(item.size) }} 万</dd></div>
-          <div><dt>执行价</dt><dd>{{ number(item.strike) }}%</dd></div>
+          <div><dt>规模</dt><dd class="option-numeric">{{ number(item.size) }} 万</dd></div>
+          <div><dt>执行价</dt><dd class="option-numeric">{{ number(item.strike) }}%</dd></div>
           <div><dt>币种</dt><dd>{{ currency }}</dd></div>
           <div class="option-rules"><dt>交易规则</dt><dd>{{ tradingRules || '--' }}</dd></div>
         </dl>

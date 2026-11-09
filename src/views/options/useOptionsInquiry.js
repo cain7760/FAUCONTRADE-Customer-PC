@@ -6,14 +6,15 @@ const items = ref(createInitialInquiries())
 const openingOrders = ref([])
 const pendingRequests = new Set()
 let sequence = 0
+export const REINQUIRY_DEMO_DELAY_MS = 5000
 
-function finishBatch(batch) {
+function finishBatch(batch, delay = 1200) {
   const ids = new Set(batch.map((item) => item.id))
   setTimeout(() => {
     const resolved = new Map(resolveInquiryBatch(batch).map((item) => [item.id, item]))
     items.value = markBestQuotes(items.value.map((item) => item.status === 'pending' ? resolved.get(item.id) || item : item))
     ids.forEach((id) => pendingRequests.delete(id))
-  }, 1200)
+  }, delay)
 }
 
 function signature(item) {
@@ -41,12 +42,13 @@ function submitInquiries(drafts) {
     batch.forEach((item) => {
       item.id += `-${request}`
       item.batchId += `-${request}`
+      item.inquiryRound = item.batchId
       pendingRequests.add(item.id)
     })
   })
   const submitted = batches.flat()
   items.value = markBestQuotes([...submitted, ...items.value])
-  batches.forEach(finishBatch)
+  batches.forEach(batch => finishBatch(batch))
   return submitted
 }
 
@@ -68,17 +70,17 @@ function reinquire(itemIds) {
   const refreshed = [...unique.values()].map(item => ({
     ...item, id: `${item.id}-R${request}`, batchId: `${item.batchId}-R${request}`,
     inquiryRound, sourceInquiryId: item.id, status: 'pending', createdAt,
-    quotes: item.quotes.map(quote => ({ ...quote })),
+    previousQuotes: item.quotes.map(quote => ({ ...quote })), quotes: [],
   }))
   refreshed.forEach(item => pendingRequests.add(item.id))
   const codes = new Set(batch.map(item => item.code))
   const previous = items.value.map(item => {
-    if (!codes.has(item.code) || !['pending', 'empty'].includes(item.status)) return item
+    if (!requested.has(item.id) && (!codes.has(item.code) || !['pending', 'empty'].includes(item.status))) return item
     pendingRequests.delete(item.id)
     return { ...item, status: 'expired', expiredAt: createdAt }
   })
   items.value = markBestQuotes([...refreshed, ...previous])
-  finishBatch(refreshed)
+  finishBatch(refreshed, REINQUIRY_DEMO_DELAY_MS)
   return refreshed
 }
 

@@ -1,6 +1,6 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 
-export function useDialogShortcuts(visible, { confirm, cancel, confirmOnInput = false }) {
+export function useDialogShortcuts(visible, { confirm, cancel, confirmOnInput = false, ignoreEnterFrom = '' }) {
   function handleKeydown(event) {
     if (!visible.value || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
     if (event.key === 'Escape') {
@@ -9,7 +9,9 @@ export function useDialogShortcuts(visible, { confirm, cancel, confirmOnInput = 
       cancel()
       return
     }
-    if (event.key === 'Enter' && (confirmOnInput || !event.target?.closest?.('input, textarea, [contenteditable="true"]'))) {
+    if (event.key === 'Enter' &&
+      !(ignoreEnterFrom && event.target?.closest?.(ignoreEnterFrom)) &&
+      (confirmOnInput || !event.target?.closest?.('input, textarea, [contenteditable="true"]'))) {
       event.preventDefault()
       event.stopPropagation()
       confirm()

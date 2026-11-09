@@ -1,10 +1,12 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { ArrowDown, ArrowRight, ArrowUp, Clock } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowRight, Clock } from '@element-plus/icons-vue'
+import expandAllIcon from '../../assets/icons/expand-all-fill.svg'
+import collapseAllIcon from '../../assets/icons/collapse-all-fill.svg'
 import TradingTable from '../../components/trading/TradingTable.vue'
 import TradingOperationColumn from '../../components/trading/TradingOperationColumn.vue'
 import SortHeader from '../../components/trading/SortHeader.vue'
-import { inquiryStatusLabels, quoteIsBest } from './inquiryModel.js'
+import { inquiryStatusLabel, quoteIsBest, inquiryRoundKey } from './inquiryModel.js'
 const props = defineProps({ items: { type: Array, required: true }, onlyBest: Boolean, latestFirst: Boolean, paused: Boolean })
 const emit = defineEmits(['order', 'reinquire'])
 const table = ref(null)
@@ -15,16 +17,17 @@ const defaults = columnOptions.map(([key]) => key), visible = ref([...defaults])
 const groups = computed(() => {
   const result = new Map()
   for (const item of props.items) {
-    const group = result.get(item.code) || { code: item.code, name: item.name, market: item.market, items: [], updated: 0 }
+    const key = inquiryRoundKey(item)
+    const group = result.get(key) || { key, createdAt: item.createdAt, code: item.code, name: item.name, market: item.market, items: [], updated: 0 }
     group.items.push(item)
     group.updated = Math.max(group.updated, new Date(item.createdAt).getTime(), ...item.quotes.map(q => new Date(q.quotedAt).getTime()))
-    result.set(item.code, group)
+    result.set(key, group)
   }
   return [...result.values()].sort((a,b) => props.latestFirst ? b.updated - a.updated : a.code.localeCompare(b.code))
 })
-watch(groups, value => { selected.value = selected.value.filter(code => value.some(group => group.code === code)) })
-const allCollapsed = computed(() => groups.value.length > 0 && groups.value.every(group => collapsed.value.includes(group.code)))
-function toggleAllGroups() { collapsed.value = allCollapsed.value ? [] : groups.value.map(group => group.code) }
+watch(groups, value => { selected.value = selected.value.filter(code => value.some(group => group.key === code)) })
+const allCollapsed = computed(() => groups.value.length > 0 && groups.value.every(group => collapsed.value.includes(group.key)))
+function toggleAllGroups() { collapsed.value = allCollapsed.value ? [] : groups.value.map(group => group.key) }
 const allSelected = computed(() => groups.value.length > 0 && selected.value.length === groups.value.length)
 const loadedRows = ref(50)
 function loadMore() { loadedRows.value += 50 }
@@ -47,8 +50,8 @@ const stateLayout = computed(() => {
   return { runs, anchor: main ? columns.value[main[0]][0] : '' }
 })
 const rows = computed(() => groups.value.flatMap(group => {
-  const header = { id: `group-${group.code}`, group, kind: 'group' }
-  if (collapsed.value.includes(group.code)) return [header]
+  const header = { id: `group-${group.key}`, group, kind: 'group' }
+  if (collapsed.value.includes(group.key)) return [header]
   const children = group.items.flatMap(item => {
     let quotes = item.status === 'quoted' ? item.quotes.filter(quote => !props.onlyBest || quoteIsBest(item, quote)) : []
     if (sort.value.direction) quotes = [...quotes].sort((a,b) => (Number(a[sort.value.key]) - Number(b[sort.value.key])) * (sort.value.direction === 'ascending' ? 1 : -1))
@@ -77,21 +80,30 @@ function spans({ row, rowIndex, columnIndex }) {
   }
   return [1,1]
 }
-function batchReinquire() { emit('reinquire', props.items.filter(item => selected.value.includes(item.code)).map(item => item.id)) }
-function revealInquiries(codes) { collapsed.value = collapsed.value.filter(code => !codes.includes(code)); loadedRows.value = Math.max(loadedRows.value, 50); table.value?.setScrollTop(0) }
+function batchReinquire() { emit('reinquire', props.items.filter(item => selected.value.includes(inquiryRoundKey(item))).map(item => item.id)) }
+function revealInquiries(entries, collapsePrevious = false) {
+  const keys = new Set(entries.map(item => typeof item === 'string' ? item : inquiryRoundKey(item)))
+  const codes = new Set(entries.map(item => typeof item === 'string' ? item : item.code))
+  collapsed.value = groups.value.filter(group => {
+    if (keys.has(group.key) || !collapsePrevious && keys.has(group.code)) return false
+    if (collapsePrevious && codes.has(group.code)) return true
+    return collapsed.value.includes(group.key)
+  }).map(group => group.key)
+  selected.value = []
+  loadedRows.value = Math.max(loadedRows.value, 50); table.value?.setScrollTop(0)
+}
 defineExpose({ batchReinquire, selected, revealInquiries })
 </script>
 <template>
-  <TradingTable ref="table" class="option-inquiry-table" table-layout="fixed" :data="rows" row-key="id" :span-method="spans" :cell-class-name="({row,column}) => row.kind === 'state' && column.property === stateLayout.anchor ? 'inquiry-state-cell' : ''" :row-class-name="({ row }) => row.kind === 'group' ? 'option-instrument-row' : ''" height="100%" @scroll="onScroll" empty-text="暂无询价记录，请在右侧提交询价">
-    <el-table-column width="30" fixed="left" align="left" class-name="inquiry-selection"><template #header><el-checkbox :model-value="allSelected" :indeterminate="selected.length > 0 && !allSelected" aria-label="选择全部询价标的" @change="selected = $event ? groups.map(group => group.code) : []"/></template><template #default="{row}"><el-checkbox v-if="row.kind === 'group'" :model-value="selected.includes(row.group.code)" :aria-label="`选择${row.group.name}`" @change="selectGroup(row.group.code, $event)"/></template></el-table-column>
+  <TradingTable ref="table" class="option-inquiry-table" table-layout="fixed" :tooltip-options="{ showArrow: false }" :data="rows" row-key="id" :span-method="spans" :cell-class-name="({row,column}) => row.kind === 'state' && column.property === stateLayout.anchor ? 'inquiry-state-cell' : ''" :row-class-name="({ row }) => row.kind === 'group' ? 'option-instrument-row' : ''" height="100%" @scroll="onScroll" empty-text="暂无询价记录，请在右侧提交询价">
+    <el-table-column width="30" fixed="left" align="left" class-name="inquiry-selection"><template #header><el-checkbox :model-value="allSelected" :indeterminate="selected.length > 0 && !allSelected" aria-label="选择全部询价标的" @change="selected = $event ? groups.map(group => group.key) : []"/></template><template #default="{row}"><el-checkbox v-if="row.kind === 'group'" :model-value="selected.includes(row.group.key)" :aria-label="`选择${row.group.name}`" @change="selectGroup(row.group.key, $event)"/></template></el-table-column>
     <el-table-column v-for="([key,label],index) in columns" :key="key" :prop="key" :label="label" :fixed="key === 'structure' ? 'left' : false" :class-name="({structure:'inquiry-structure-column',rate:'inquiry-rate-column',knockout:'inquiry-knockout-column',capacity:'inquiry-capacity-column',currency:'inquiry-currency-column'})[key] || ''" :min-width="132" :align="key === 'capacity' ? 'right' : 'left'"  :show-overflow-tooltip="key !== 'structure'">
-      <template #header><SortHeader v-if="['rate','capacity'].includes(key)" :label="label" numeric :direction="sort.key === key ? sort.direction : null" @sort="toggleSort(key)"/><span v-else-if="key === 'structure'" class="inquiry-structure-heading">{{ label }}<button type="button" class="inquiry-toggle-all" :disabled="!groups.length" :aria-label="allCollapsed ? '展开全部询价' : '收起全部询价'" :title="allCollapsed ? '展开全部询价' : '收起全部询价'" @click.stop="toggleAllGroups"><el-icon><ArrowDown v-if="allCollapsed"/><ArrowUp v-else/></el-icon></button></span><span v-else>{{ label }}</span></template>
+      <template #header><SortHeader v-if="['rate','capacity'].includes(key)" :label="label" numeric :direction="sort.key === key ? sort.direction : null" @sort="toggleSort(key)"/><span v-else-if="key === 'structure'" class="inquiry-structure-heading"><button type="button" class="inquiry-toggle-all" :disabled="!groups.length" :aria-label="allCollapsed ? '展开全部询价' : '收起全部询价'" :title="allCollapsed ? '展开全部询价' : '收起全部询价'" @click.stop="toggleAllGroups"><span class="inquiry-toggle-all-icon" aria-hidden="true" :style="{ maskImage: `url(&quot;${allCollapsed ? expandAllIcon : collapseAllIcon}&quot;)` }"/></button><span>{{ label }}</span></span><span v-else>{{ label }}</span></template>
       <template #default="{row}">
-        <div v-if="row.kind === 'group' && index === 0" class="option-instrument-heading"><button type="button" :aria-label="`${collapsed.includes(row.group.code) ? '展开' : '收起'}${row.group.name}`" @click="toggleGroup(row.group.code)"><el-icon><ArrowRight v-if="collapsed.includes(row.group.code)"/><ArrowDown v-else/></el-icon></button><strong>{{ row.group.name }}（{{ row.group.code }}）</strong><small>询价规模：<b class="inquiry-size-value">{{ inquirySizes(row.group) }}</b></small></div>
+        <div v-if="row.kind === 'group' && index === 0" class="option-instrument-heading"><button type="button" :aria-label="`${collapsed.includes(row.group.key) ? '展开' : '收起'}${row.group.name}`" @click="toggleGroup(row.group.key)"><el-icon><ArrowRight v-if="collapsed.includes(row.group.key)"/><ArrowDown v-else/></el-icon></button><strong>{{ row.group.name }}（{{ row.group.code }}）</strong><span class="inquiry-group-divider" aria-hidden="true"/><small class="inquiry-group-size">询价规模：<b class="inquiry-size-value">{{ inquirySizes(row.group) }}</b></small></div>
         <template v-else-if="row.item">
           <span v-if="key === 'structure'" class="option-structure" :title="`询价规模 ${format(row.item.size)} 万`">{{ row.item.strike }}{{ row.item.direction === 'call' ? 'C' : 'P' }} {{ row.item.tenor }}</span>
-          <span v-else-if="row.kind === 'state' && key === stateLayout.anchor" class="option-inquiry-status" :class="`is-${row.item.status}`"><el-icon aria-hidden="true"><Clock v-if="row.item.status === 'pending'"/><svg v-else class="quotation-state-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2.5h5l6 6a1 1 0 0 1 0 1.4l-3.6 3.6a1 1 0 0 1-1.4 0l-6-6z"/><circle cx="4.8" cy="4.8" r=".65" fill="currentColor" stroke="none"/><path v-if="row.item.status === 'empty'" d="M7.3 9h3.4"/><path v-else d="M3 13 13 3"/></svg></el-icon>{{ inquiryStatusLabels[row.item.status] }}</span>
-          <template v-else-if="row.kind === 'state' && key === 'currency'">--</template>
+          <span v-else-if="row.kind === 'state' && key === stateLayout.anchor" class="option-inquiry-status" :class="`is-${row.item.status}`"><el-icon aria-hidden="true"><Clock v-if="row.item.status === 'pending'"/><svg v-else class="quotation-state-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2.5h5l6 6a1 1 0 0 1 0 1.4l-3.6 3.6a1 1 0 0 1-1.4 0l-6-6z"/><circle cx="4.8" cy="4.8" r=".65" fill="currentColor" stroke="none"/><path v-if="row.item.status === 'empty'" d="M7.3 9h3.4"/><path v-else d="M3 13 13 3"/></svg></el-icon>{{ inquiryStatusLabel(row.item) }}</span>
           <template v-else-if="row.kind === 'state'"></template>
           <span v-else-if="key === 'rate'" class="option-quote-rate" :class="{ best: quoteIsBest(row.item,row.quote) }">{{ row.quote.rate.toFixed(2) }}%<span v-if="quoteIsBest(row.item,row.quote)" class="option-best" aria-label="最优报价" title="当前组合最低报价">优</span></span>
           <template v-else-if="key === 'currency'">{{ row.item.currency }}</template>
@@ -107,11 +119,16 @@ defineExpose({ batchReinquire, selected, revealInquiries })
 </template>
 <style scoped>
 .inquiry-structure-heading{display:inline-flex;align-items:center;gap:6px}
-.inquiry-toggle-all{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:3px;background:transparent;color:var(--el-text-color-secondary);cursor:pointer}
+.inquiry-toggle-all{display:inline-flex;align-items:center;justify-content:center;width:12px;height:20px;margin-left:2px;padding:0;border:0;border-radius:3px;background:transparent;color:var(--el-text-color-secondary);cursor:pointer}
+.inquiry-toggle-all-icon{width:12px;height:12px;background:currentColor;mask-size:contain;mask-position:center;mask-repeat:no-repeat}
 .inquiry-toggle-all:hover:not(:disabled){background:var(--el-fill-color-light);color:var(--el-color-primary)}
 .inquiry-toggle-all:disabled{opacity:.45;cursor:default}
 
 .option-inquiry-table :deep(.option-reinquire){display:inline-flex;align-items:center;justify-content:center;width:40px;padding:0;text-align:center;line-height:20px}
+/* 数值右边缘对齐表头文本，排序图标单独占据右侧留白。 */
+/* 溢出提示的内容单元格按列宽减 2px 渲染，表头采用相同宽度。 */
+.option-inquiry-table :deep(th.inquiry-capacity-column>.cell){width:calc(100% - 2px)}
+.option-inquiry-table :deep(.inquiry-capacity-column .sort-heading-marker){position:absolute;left:calc(100% + 4px);top:50%;transform:translateY(-50%)}
 /* 两个相邻列默认各 12px 内边距，放大四倍后各为 48px。 */
 :global(.variants-app .options-workspace .option-inquiry-table.el-table .inquiry-capacity-column>.cell){padding-right:48px!important}
 :global(.variants-app .options-workspace .option-inquiry-table.el-table .inquiry-currency-column>.cell){padding-left:48px!important}
@@ -125,6 +142,12 @@ defineExpose({ batchReinquire, selected, revealInquiries })
 .option-inquiry-table{container-type:inline-size}
 .option-inquiry-table .option-instrument-heading>strong,.option-inquiry-table .option-instrument-heading>span{flex:none}
 .option-inquiry-table .option-instrument-heading>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 统一标的名称占位，规模标签与报价列错开，避免被误认为报价数据。 */
+.option-inquiry-table .option-instrument-heading>strong{flex:0 0 128px}
+.option-inquiry-table .option-instrument-heading>.inquiry-group-divider{width:1px;height:12px;margin-left:52px;background:var(--el-table-header-text-color);opacity:.5}
+.option-inquiry-table .option-instrument-heading>.inquiry-group-size{margin-left:7px;text-align:left}
+.option-instrument-heading>button{height:20px;align-items:center;justify-content:center;flex:none}
+.option-instrument-heading>button :deep(svg path){stroke:currentColor;stroke-width:1px;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 
 :global(.variants-app .options-workspace .option-inquiry-table.el-table .inquiry-rate-column>.cell){padding-left:20px!important;padding-right:32px!important}
 :global(.variants-app .options-workspace .option-inquiry-table.el-table .inquiry-knockout-column>.cell){padding-left:32px!important}
@@ -152,8 +175,9 @@ defineExpose({ batchReinquire, selected, revealInquiries })
 
 .option-inquiry-table{flex:1;min-height:0}.option-inquiry-table :deep(.option-instrument-row td.el-table__cell){background:#272a2e}.option-instrument-heading{display:flex;align-items:center;gap:8px;text-align:left;line-height:20px}.option-instrument-heading button{padding:0;background:none;border:0;color:var(--el-text-color-secondary);width:16px;display:flex}.option-instrument-heading strong{color:var(--el-text-color-primary);font-size:12px;font-weight:600}.option-instrument-heading>span,.option-instrument-heading small{color:var(--el-text-color-secondary);font-size:11px}.option-instrument-heading small{margin-left:8px;font-size:12px}.option-structure{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600}.option-structure small{font-size:10px;color:var(--el-text-color-secondary);font-weight:400}.option-quote-rate{display:inline-flex;align-items:center;gap:5px}.option-quote-rate.best{color:var(--el-color-primary)}.option-best{font-size:10px;line-height:14px;border:1px solid #78612f;border-radius:2px;padding:0 2px}.option-quote-order.el-button{height:24px;padding:0 10px;border-color:var(--el-color-primary);background:var(--el-color-primary);color:#fff;font-size:12px;width:40px;padding:0}.option-inquiry-table :deep(.el-checkbox){height:20px}.history-view:disabled{opacity:.45;cursor:not-allowed}
 
-:global(.variants-app .options-workspace .option-inquiry-table.el-table .inquiry-state-cell>.cell){padding:0 20px!important;text-align:center}
-.option-inquiry-status{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:400;line-height:20px}
+/* 合并单元格按完整宽度居中，覆盖组件按单列计算的内容宽度与数值列内边距。 */
+:global(.variants-app .options-workspace .option-inquiry-table.el-table .inquiry-state-cell>.cell){display:flex;align-items:center;justify-content:center;width:100%!important;padding:0!important;text-align:center}
+.option-inquiry-status{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:400;line-height:20px}
 .option-inquiry-status .el-icon{font-size:14px;flex:none}
 .quotation-state-icon{fill:none}
 .option-inquiry-status.is-pending{color:#8cb6c7}

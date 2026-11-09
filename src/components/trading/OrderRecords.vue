@@ -27,11 +27,11 @@ const progressPercent = row => {
             <div class="table-toolbar-actions"><el-tooltip content="刷新当前表格" placement="top"><button class="refresh-table" aria-label="刷新订单记录" @click="refreshTable"><el-icon><Refresh /></el-icon></button></el-tooltip><button class="export-orders" aria-label="导出订单记录" title="导出当前订单表格数据" @click="confirmExport('orders')"><el-icon><svg class="export-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg></el-icon></button></div>
           </div>
           <TradingTable :key="`orders-${tableRefreshKey}`" class="original-fields orders-table" :data="sortedOrders" :row-class-name="orderRowClassName" height="100%" :fit="false" empty-text="暂无订单记录" :cell-class-name="copyableIdentifierCellClass" @cell-dblclick="handleTableCellDoubleClick">
-            <el-table-column type="index" :index="index => indexOffset + index + 1" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
+            <el-table-column type="index" fixed="left" :index="index => indexOffset + index + 1" label="序号" width="44" align="center" header-align="center" class-name="order-index-column" label-class-name="order-index-column" />
             <slot name="leading-columns" />
             <template v-for="columnKey in orderVisibleColumnKeys" :key="columnKey">
-              <el-table-column v-if="columnKey === 'code'" prop="code" label="证券代码" width="68"/>
-              <el-table-column v-else-if="columnKey === 'name'" prop="name" label="证券名称" width="68"/>
+              <el-table-column v-if="columnKey === 'code'" prop="code" fixed="left" label="证券代码" width="68"/>
+              <el-table-column v-else-if="columnKey === 'name'" prop="name" fixed="left" label="证券名称" width="68"/>
               <el-table-column v-else-if="columnKey === 'status'" prop="status" label="订单状态" width="120" align="center" header-align="center" class-name="order-status-column" label-class-name="order-status-column"><template #default="{row}"><span class="order-status" :class="`is-${orderStatusVisual(row.status).tone}`"><svg class="order-status-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path :d="orderStatusVisual(row.status).path" /></svg>{{ row.status }}</span></template></el-table-column>
               <el-table-column v-else-if="columnKey === 'openClose'" prop="openClose" label="开平方向" width="64"><template #default="{row}">{{ row.openClose === '开' ? '开仓' : '平仓' }}</template></el-table-column>
               <el-table-column v-else-if="columnKey === 'side'" label="方向" width="64" align="left" header-align="left"><template #default="{row}"><span :class="row.side==='buy'?'up':'down'">{{ row.side==='buy'?'买':'卖' }}</span></template></el-table-column>
