@@ -1,9 +1,12 @@
 import { ref } from 'vue'
+import { isScheduledEntry, validateOptionOrder } from './optionOrderModel.js'
 import { buildInquiryItems, calculateOptionFee, createInitialInquiries, markBestQuotes, resolveInquiryBatch, validateInquiry } from './inquiryModel.js'
 
 // Module lifetime keeps the prototype's inquiries and opening orders when switching menus.
 const items = ref(createInitialInquiries())
 const openingOrders = ref([])
+// 期权独立演示资金，不以权益持仓市值代替账户余额；正式数据由期权资金接口提供。
+const optionAccount = ref({ availableBalance: 0, accountBalance: -1847496.29 })
 const pendingRequests = new Set()
 let sequence = 0
 export const REINQUIRY_DEMO_DELAY_MS = 5000
@@ -84,16 +87,15 @@ function reinquire(itemIds) {
   return refreshed
 }
 
-function placeOrder({ item, quote, entryMode, principal, remark = '' }) {
+function placeOrder(payload) {
+  const { item, quote, entryMode, principal, limitPrice, executionTime, remark = '' } = payload
   const current = items.value.find((entry) => entry.id === item?.id)
   const currentQuote = current?.quotes.find((entry) => entry.id === quote?.id)
   if (current?.status !== 'quoted' || !currentQuote) throw new Error('当前报价不可下单，请重新询价')
   if (quote.rate !== currentQuote.rate || quote.capacity !== currentQuote.capacity || quote.quotedAt !== currentQuote.quotedAt) throw new Error('报价已更新，请刷新并重新选择报价')
-  if (!['limit', 'market', 'twap'].includes(entryMode)) throw new Error('请选择入场方式')
+  const error = validateOptionOrder({ ...payload, item: current, quote: currentQuote })
+  if (error) throw new Error(error)
   const size = Number(principal)
-  if (!Number.isFinite(size) || size <= 0) throw new Error('请输入大于 0 的名义本金')
-  if (size > currentQuote.capacity) throw new Error('名义本金不可超过当前报价反馈量')
-  if (String(remark).length > 200) throw new Error('备注最多 200 字')
   const submittedAt = new Date().toISOString()
   const id = `OPT-${Date.now()}-${++sequence}`
   const order = {
@@ -118,6 +120,13 @@ function placeOrder({ item, quote, entryMode, principal, remark = '' }) {
     principal: size,
     optionFee: calculateOptionFee(size, currentQuote.rate),
     entryMode,
+    limitPrice: entryMode === 'limit' ? Number(limitPrice) : null,
+    executionTime: isScheduledEntry(entryMode) ? executionTime.slice() : null,
+    participation: current.participation ?? 100,
+    inquirySize: current.size,
+    quotedAt: currentQuote.quotedAt,
+    quoteCapacity: currentQuote.capacity,
+    traderRemark: currentQuote.traderRemark || '',
     remark: String(remark).trim(),
   }
   openingOrders.value.unshift(order)
@@ -125,5 +134,5 @@ function placeOrder({ item, quote, entryMode, principal, remark = '' }) {
 }
 
 export function useOptionsInquiry() {
-  return { items, openingOrders, submitInquiry, submitInquiries, reinquire, placeOrder }
+  return { items, openingOrders, optionAccount, submitInquiry, submitInquiries, reinquire, placeOrder }
 }

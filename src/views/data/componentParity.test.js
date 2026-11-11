@@ -102,16 +102,21 @@ test('平仓与改单共用信息摘要及左栏行情布局，平仓保留四�
 
 
 test('期权与权益共用资产概要的展示及隐藏交互', () => {
-  for (const path of ['../options/OptionOrderTicket.vue','../equity/pages/EquityTradingPage.vue']) {
+  for (const path of ['../options/OptionAssetSummary.vue','../equity/pages/EquityTradingPage.vue']) {
     const source = read(path)
     assert.ok(source.includes('<TradingAssetSummary'))
     assert.ok(source.includes('@toggle-visibility="toggleAssetsVisible"'))
-    assert.ok(source.includes('@update:collapsed="assetsCollapsed=$event"'))
+    assert.match(source, /@update:collapsed="assetsCollapsed\s*=\s*\$event"/)
   }
   const summary = read('../../components/trading/TradingAssetSummary.vue')
   assert.ok(summary.includes('assetAmountParts'))
   assert.ok(summary.includes('assetsVisible'))
   assert.ok(summary.includes('assetsCollapsed'))
+  assert.ok(summary.includes('<slot name="metrics">'))
+  assert.ok(summary.includes('大账户实时可用') && summary.includes('持仓市值') && summary.includes('浮动盈亏'))
+  const options = read('../options/OptionAssetSummary.vue')
+  assert.ok(options.includes('可用余额（实时）') && options.includes('账户余额'))
+  assert.ok(read('../options/OptionOrderTicket.vue').includes('<OptionAssetSummary'))
 })
 
 

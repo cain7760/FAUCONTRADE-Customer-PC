@@ -124,10 +124,10 @@ test('customer flow resolves together, rejects duplicate pending requests, and c
   const item = resolved[0]
   const quote = item.quotes[0]
   for (const changed of [{ rate: quote.rate + 0.1 }, { capacity: quote.capacity + 1 }, { quotedAt: '2020-01-01T00:00:00Z' }]) {
-    assert.throws(() => store.placeOrder({ item, quote: { ...quote, ...changed }, entryMode: 'limit', principal: 500 }), /报价已更新/)
+    assert.throws(() => store.placeOrder({ item, quote: { ...quote, ...changed }, entryMode: 'limit', limitPrice: 11.78, principal: 500 }), /报价已更新/)
   }
-  assert.throws(() => store.placeOrder({ item, quote, entryMode: 'limit', principal: quote.capacity + 1 }), /不可超过/)
-  const order = store.placeOrder({ item, quote, entryMode: 'limit', principal: 500, remark: '客户备注' })
+  assert.throws(() => store.placeOrder({ item, quote, entryMode: 'limit', limitPrice: 11.78, principal: quote.capacity + 1 }), /不可超过/)
+  const order = store.placeOrder({ item, quote, entryMode: 'limit', limitPrice: 11.78, principal: 500, remark: '客户备注' })
   assert.equal(order.status, '待报')
   assert.equal(order.account, 'TZS_T1')
   assert.equal(order.optionFee, calculateOptionFee(500, quote.rate))
@@ -140,7 +140,7 @@ test('customer flow resolves together, rejects duplicate pending requests, and c
   assert.notEqual(inquiryRoundKey(pending), inquiryRoundKey(item))
   assert.equal(store.items.value.length, countBeforeReinquiry + 1)
   assert.equal(store.items.value.find(entry => entry.id === item.id).status, 'expired')
-  assert.throws(() => store.placeOrder({ item, quote, entryMode:'limit', principal:500 }), /当前报价不可下单/)
+  assert.throws(() => store.placeOrder({ item, quote, entryMode:'limit', limitPrice:11.78, principal:500 }), /当前报价不可下单/)
   assert.deepEqual(pending.quotes, [])
   context.mock.timers.tick(REINQUIRY_DEMO_DELAY_MS - 1)
   assert.equal(store.items.value.find(entry => entry.id === pending.id).status, 'pending')
@@ -149,7 +149,7 @@ test('customer flow resolves together, rejects duplicate pending requests, and c
   assert.equal(refreshed.status, 'quoted')
   assert.equal(refreshed.quotes[0].previousRate, quote.rate)
   assert.equal(store.items.value.find(entry => entry.id === item.id).status, 'expired')
-  assert.throws(() => store.placeOrder({ item, quote, entryMode:'limit', principal:500 }), /当前报价不可下单/)
+  assert.throws(() => store.placeOrder({ item, quote, entryMode:'limit', limitPrice:11.78, principal:500 }), /当前报价不可下单/)
   const next = store.reinquire([item.id, refreshed.id])
   assert.equal(next.length, 1, 're-inquiry must not multiply duplicate historical conditions')
   context.mock.timers.tick(REINQUIRY_DEMO_DELAY_MS)

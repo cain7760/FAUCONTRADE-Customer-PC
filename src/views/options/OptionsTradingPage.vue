@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, inject, nextTick, reactive, ref, watch } from 'vue'
 import BaseDialog from '../../components/BaseDialog.vue'
 import DialogActions from '../../components/DialogActions.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import TradingTable from '../../components/trading/TradingTable.vue'
 import SortHeader from '../../components/trading/SortHeader.vue'
 import ColumnConfigPopover from '../../components/trading/ColumnConfigPopover.vue'
@@ -14,6 +14,8 @@ import OptionInquiryForm from './OptionInquiryForm.vue'
 import OptionInquiryRecords from './OptionInquiryRecords.vue'
 import ReinquiryAnnotation from './ReinquiryAnnotation.vue'
 import OptionOrderTicket from './OptionOrderTicket.vue'
+import OptionOrderConfirmation from './OptionOrderConfirmation.vue'
+import { entryModeLabels, validateOptionOrder } from './optionOrderModel.js'
 import OptionsRecordFilters from './OptionsRecordFilters.vue'
 import { inquiryStatusLabel, matchesInquiryFilter } from './inquiryModel.js'
 import { useOptionsInquiry } from './useOptionsInquiry.js'
@@ -29,10 +31,11 @@ function ensureTradingTime() {
   if (error) throw new Error(error)
 }
 
-const { items, openingOrders, submitInquiries, reinquire, placeOrder } = useOptionsInquiry()
+const { items, openingOrders, optionAccount, submitInquiries, reinquire, placeOrder } = useOptionsInquiry()
 const batchVisible = ref(false)
 const reinquiryIds = ref([]), reinquiryVisible = ref(false), reinquirySubmitting = ref(false)
 const activeTab = ref('inquiries'), selectedQuote = ref(null), selectedOrderId = ref(''), submitting = ref(false)
+const orderSnapshot = ref(null)
 const onlyBest = ref(false), latestFirst = ref(true), inquiryTable = ref(null)
 const today = () => new Date().toLocaleDateString('sv-SE')
 const emptyFilters = () => ({ symbol: '', dates: [today(), today()], direction: '', tenor: [], knockout: [], exercise: [], dividend: [], structure: [], status: '' })
@@ -42,7 +45,7 @@ const accountOrders = openingOrders
 const tabs = computed(() => [{key:'inquiries',label:'全部询价',count:accountItems.value.length},{key:'opening',label:'开仓委托',count:accountOrders.value.length},{key:'positions',label:'期权持仓',count:0},{key:'closing',label:'平仓委托',count:0}])
 const orderColumns = [['name','证券名称'],['code','证券代码'],['status','订单状态'],['direction','期权方向'],['structure','结构 / 期限'],['principal','名义本金(万)'],['rate','报价(%)'],['optionFee','期权费'],['currency','币种'],['entryMode','入场方式'],['knockout','敲出规则'],['exercise','最快行权日'],['dividend','分红规则'],['orderNo','订单编号'],['submittedAt','订单时间'],['remark','备注']]
 const visibleOrderColumns = ref(orderColumns.map(([key]) => key)), orderSort = ref({key:'',direction:null})
-const modeLabels = { limit:'限价', market:'市价', twap:'TWAP' }
+const modeLabels = entryModeLabels
 const number = value => Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 })
 const money = value => Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const dateTime = value => new Date(value).toLocaleString('zh-CN', {hour12:false})
@@ -117,20 +120,28 @@ async function confirmReinquiry() {
   finally { reinquirySubmitting.value = false }
 }
 function chooseQuote(value) { selectedQuote.value = value }
-async function submitOrder(payload) {
+function submitOrder(payload) {
   if (submitting.value || props.paused) return
+  try {
+    ensureTradingTime()
+    const error = validateOptionOrder(payload)
+    if (error) throw new Error(error)
+    // 预览使用独立快照，后台报价更新或重询不能悄悄改变客户待确认的信息。
+    orderSnapshot.value = JSON.parse(JSON.stringify(payload))
+  } catch (error) { ElMessage.warning(error.message) }
+}
+async function confirmOrder() {
+  if (!orderSnapshot.value || submitting.value || props.paused) return
   submitting.value = true
   try {
     ensureTradingTime()
-    await ElMessageBox.confirm(`确认按 ${payload.quote.rate.toFixed(2)}% 的报价，提交 ${number(payload.principal)} 万 ${payload.item.currency} 名义本金的${payload.item.name}期权委托？`, '确认下单', { confirmButtonText:'确认下单',cancelButtonText:'返回',customClass:'variant-popper' })
-    if (props.paused) throw new Error('系统已中断，暂不可提交')
-    ensureTradingTime()
-    const order = placeOrder(payload)
+    const order = placeOrder(orderSnapshot.value)
+    orderSnapshot.value = null
     selectedOrderId.value = order.id
     selectedQuote.value = null
     activeTab.value = 'opening'; resetFilters()
     ElMessage.success('下单提交成功')
-  } catch (error) { if (error !== 'cancel' && error !== 'close') ElMessage.warning(error.message || '下单未完成') }
+  } catch (error) { ElMessage.warning(error.message || '下单未完成') }
   finally { submitting.value = false }
 }
 function toggleSort(key) { orderSort.value = {key,direction:orderSort.value.key !== key || !orderSort.value.direction ? 'ascending' : orderSort.value.direction === 'ascending' ? 'descending' : null} }
@@ -171,8 +182,9 @@ function exportRecords() {
       <TradingTable v-else :data="[]" height="100%" :empty-text="activeTab === 'positions' ? '暂无期权持仓' : '暂无平仓委托'"><el-table-column label="证券名称"/><el-table-column label="结构 / 期限"/><el-table-column label="名义本金(万)"/><el-table-column label="币种"/></TradingTable>
       <footer class="options-table-footer">{{ activeTab === 'inquiries' ? `共 ${filteredItems.length} 个询价组合` : activeTab === 'opening' ? `共 ${filteredOrders.length} 条开仓委托` : '共 0 条' }}</footer>
     </section>
-    <aside class="workspace-panel options-ticket-pane"><OptionOrderTicket v-if="selectedQuote" :key="selectedQuote.quote.id" :item="selectedQuote.item" :quote="selectedQuote.quote" :context="context" :paused="paused" @back="selectedQuote = null" @submit="submitOrder"/><OptionInquiryForm v-else :paused="paused" @submit="requestInquiry" @batch="batchVisible=true"/></aside>
+    <aside class="workspace-panel options-ticket-pane"><OptionOrderTicket v-if="selectedQuote" :key="selectedQuote.quote.id" :item="selectedQuote.item" :quote="selectedQuote.quote" :context="context" :account="optionAccount" :paused="paused" @back="selectedQuote = null" @submit="submitOrder"/><OptionInquiryForm v-else :paused="paused" @submit="requestInquiry" @batch="batchVisible=true"/></aside>
     <BatchInquiryDialog v-if="batchVisible" v-model="batchVisible" :paused="paused" :submit-batch="requestBatchInquiry"/>
+    <OptionOrderConfirmation :snapshot="orderSnapshot" :loading="submitting" :paused="paused" @cancel="orderSnapshot = null" @confirm="confirmOrder" />
     <BaseDialog v-model="reinquiryVisible" title="确认重询" width="420px" align-center class="variant-confirm option-reinquiry-confirm" :close-on-click-modal="false" :close-on-press-escape="!reinquirySubmitting">
       <p>将按所选组参数发起新一轮询价，原询价将失效且不可下单，记录保留。是否继续？</p>
       <template #footer><DialogActions cancel-text="取消[Esc]" confirm-text="确认重询[Enter]" :loading="reinquirySubmitting" :confirm-disabled="paused" @cancel="closeReinquiry" @confirm="confirmReinquiry"/></template>
