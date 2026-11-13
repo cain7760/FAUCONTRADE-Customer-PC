@@ -53,8 +53,11 @@ test('实际撤单逻辑写入撤单或部撤，已成交数量保持不变', ()
   for (const filledQuantity of [0, 400]) {
     const row = { status: filledQuantity ? '部成' : '已报', quantity: 1000, filledQuantity, reportQuantity: 1000 - filledQuantity }
     const context = { systemRunning: { value: true }, cancelingOrder: { value: row }, cancelOrderVisible: { value: true },
-      canOperateOrder: () => true, cancelableQuantity: evaluate('cancelableQuantity'),
+      canSubmitTradingOperation: () => true, canOperateOrder: () => true, cancelableQuantity: evaluate('cancelableQuantity'),
       publishOrderActivityMessage() {}, publishOrderOperationMessage() {} }
+    context.deferLunchOperation = () => false
+    context.tradingTimeMode = { value: 'trading' }
+    context.completeCancellation = evaluate('completeCancellation', context)
     evaluate('confirmCancelOrder', context)()
     assert.equal(row.status, filledQuantity ? '部撤' : '撤单')
     assert.equal(row.filledQuantity, filledQuantity)
