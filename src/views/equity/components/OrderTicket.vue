@@ -2,9 +2,9 @@
 import InstrumentSearchHistory from '../../../components/trading/InstrumentSearchHistory.vue'
 import ExecutionTimeRange from '../../../components/trading/ExecutionTimeRange.vue'
 import ExecutionAlgorithmTabs from '../../../components/trading/ExecutionAlgorithmTabs.vue'
-import { executionShortcut, executionDurationMinutes } from '../../../domain/orders/executionSchedule.js'
+import { executionDurationMinutes } from '../../../domain/orders/executionSchedule.js'
 import { tradingTimeErrorKey } from '../../../composables/useTradingTime.js'
-import { isValidPovDuration, povOrderTimeError, povParametersError } from '../../../domain/orders/povSchedule.js'
+import { isValidPovDuration, povOrderTimeError, povParametersError, resolvePovExecutionTime } from '../../../domain/orders/povSchedule.js'
 import { inject, computed, nextTick, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp, CircleClose, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -213,18 +213,19 @@ function openAlgorithmConfig() {
   algorithmConfigTouched.value = false
   if (props.customerOrderReadonly) return
   algorithmConfigNow.value = new Date()
-  draftPovExecutionTime.value = povExecutionTime.value?.slice()
-    || executionShortcut(ticketSymbol.value, Number(povHours.value) * 60 + Number(povMinutes.value), algorithmConfigNow.value, 3, true)
+  draftPovExecutionTime.value = povExecutionTime.value?.slice() || ['', '']
   draftPovParticipation.value = povParticipation.value
 }
 function cancelAlgorithmConfig() { algorithmPopoverVisible.value = false }
 function confirmAlgorithmConfig() {
   algorithmConfigNow.value = new Date()
   if (draftPovParameterError.value) return
-  povExecutionTime.value = draftPovExecutionTime.value.slice()
-  const duration = executionDurationMinutes(ticketSymbol.value, povExecutionTime.value, algorithmConfigNow.value, true)
-  povHours.value = Math.floor(duration / 60)
-  povMinutes.value = duration % 60
+  povExecutionTime.value = draftPovExecutionTime.value?.slice() || ['', '']
+  const duration = executionDurationMinutes(ticketSymbol.value, povExecutionTime.value, algorithmConfigNow.value, true, true)
+  if (duration > 0) {
+    povHours.value = Math.floor(duration / 60)
+    povMinutes.value = duration % 60
+  }
   povParticipation.value = draftPovParticipation.value
   algorithmPopoverVisible.value = false
 }
@@ -321,7 +322,13 @@ function submit() {
     ElMessage.error('下单失败，最大可用不足')
     return
   }
-  emit('order', { ...snapshot.value }); ElMessage.success('操作成功。'); resetOrder()
+  const order = { ...snapshot.value }
+  if (order.algorithm === 'POV' && order.executionType !== 'highTouch') {
+    order.algorithmParams = { ...order.algorithmParams, executionTime: resolvePovExecutionTime(order, order.algorithmParams?.executionTime) }
+    const [start, end] = order.algorithmParams.executionTime
+    if (!start || !end || start >= end) { ElMessage.error('结束时间须晚于开始时间'); return }
+  }
+  emit('order', order); ElMessage.success('操作成功。'); resetOrder()
 }
 useDialogShortcuts(confirming, { confirm: submit, cancel: () => { confirming.value = false } })
 useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, cancel: () => { manualInstrumentVisible.value = false }, confirmOnInput: true })
@@ -373,7 +380,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
           <div class="execution-algorithm-menu">
             <span>POV 参数</span>
             <div class="algorithm-popper-params" aria-label="POV 参数">
-              <ExecutionTimeRange v-model="draftPovExecutionTime" :item="ticketSymbol" market-hours hide-two-hour @update:model-value="algorithmConfigTouched = true" />
+              <ExecutionTimeRange v-model="draftPovExecutionTime" :item="ticketSymbol" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
               <div class="algorithm-param-row">
                 <span>市场成交占比</span>
                 <div class="algorithm-param-input is-participation">
@@ -396,7 +403,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
     <section v-if="executionType === 'highTouch' || customerOrderReadonly" class="order-note-block"><div class="field-caption"><label for="manual-order-note">备注</label></div><el-input id="manual-order-note" v-model="note" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入备注" /></section>
     <section class="submit-block"><div class="trade-buttons"><el-button v-if="!sourceOrderSide || sourceOrderSide === 'buy'" class="buy-action" :disabled="!canBuy" @click="preview('buy')">买入</el-button><el-button v-if="!sourceOrderSide || sourceOrderSide === 'sell'" class="sell-action" :disabled="!canSell" @click="preview('sell')">卖出</el-button></div><template v-if="executionType === 'lowTouch'"><div class="order-totals"><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入预估(股)</span><b>{{ buyShares ? number(buyShares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>卖出预估(股)</span></div><b>{{ sellShares ? number(sellShares) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide !== 'sell'" class="total-item"><span>买入金额(CNY)</span><b>{{ buyShares ? money(buyShares * (estimatedPrice || 0)) : '--' }}</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'" class="total-item"><div class="total-heading"><span>预估卖出金额(CNY)</span></div><b>{{ sellShares ? money(sellShares * (estimatedPrice || 0)) : '--' }}</b></div></div></template></section>
   </div>
-  <BaseDialog v-model="confirming" :title="confirmationTitle" width="460px" align-center append-to-body class="variant-confirm order-confirm" :close-on-press-escape="false"><template v-if="snapshot"><div class="confirm-identity" :class="snapshot.side"><span>{{ snapshot.side === 'buy' ? '买入' : '卖出' }}</span><strong>{{ snapshot.name }}</strong><small>{{ snapshot.code }}</small></div><p v-if="exceedsMaxBuy" class="buy-capacity-warning" role="alert">订单数量大于最大可买数量，委托可能不会成功，请确认。</p><div class="confirm-key-metrics"><div><span>订单价格({{ snapshot.currency }})</span><b>{{ snapshot.type === 'limit' ? money(snapshot.price) : '市价' }}</b></div><div><span>订单数量(股)</span><b>{{ number(snapshot.quantity) }}</b></div><div><span>预估金额(CNY)</span><b>{{ money(snapshot.estimate) }}</b></div></div><dl class="confirm-details"><dt>下单账户</dt><dd>{{ snapshot.accountLabel || snapshot.account }}</dd><template v-if="snapshot.framework"><dt>客户框架</dt><dd>{{ snapshot.framework }}</dd></template><template v-if="snapshot.executionChannel"><dt>上手方</dt><dd>{{ snapshot.counterparty || '线下单' }}</dd></template><template v-if="snapshot.algorithmParams"><dt>执行时间</dt><dd v-if="snapshot.algorithmParams.executionTime">{{ snapshot.algorithmParams.executionTime.join(' - ') }}</dd><dd v-else>{{ snapshot.algorithmParams.hours }} 时 {{ snapshot.algorithmParams.minutes }} 分</dd><dt>市场成交占比</dt><dd>{{ snapshot.algorithmParams.participation }}%</dd></template><template v-if="snapshot.inputAmount !== null"><dt>订单金额</dt><dd>{{ money(snapshot.inputAmount) }} CNY</dd></template><dt>订单类型</dt><dd><span class="order-confirm-tag">{{ snapshot.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></dd><dt>执行算法</dt><dd><span class="order-confirm-tag">{{ algorithmDisplay(snapshot.algorithm) }}</span></dd><dt>订单方式</dt><dd><span class="order-confirm-tag">{{ snapshot.type === 'limit' ? '限价单' : '市价单' }}</span></dd><template v-if="snapshot.note"><dt>备注</dt><dd>{{ snapshot.note }}</dd></template></dl></template><template #footer><DialogActions cancel-text="返回" :confirm-text="`确认${snapshot?.side === 'buy' ? '买入' : '卖出'}`" @cancel="confirming = false" @confirm="submit"/></template></BaseDialog>
+  <BaseDialog v-model="confirming" :title="confirmationTitle" width="460px" align-center append-to-body class="variant-confirm order-confirm" :close-on-press-escape="false"><template v-if="snapshot"><div class="confirm-identity" :class="snapshot.side"><span>{{ snapshot.side === 'buy' ? '买入' : '卖出' }}</span><strong>{{ snapshot.name }}</strong><small>{{ snapshot.code }}</small></div><p v-if="exceedsMaxBuy" class="buy-capacity-warning" role="alert">订单数量大于最大可买数量，委托可能不会成功，请确认。</p><div class="confirm-key-metrics"><div><span>订单价格({{ snapshot.currency }})</span><b>{{ snapshot.type === 'limit' ? money(snapshot.price) : '市价' }}</b></div><div><span>订单数量(股)</span><b>{{ number(snapshot.quantity) }}</b></div><div><span>预估金额(CNY)</span><b>{{ money(snapshot.estimate) }}</b></div></div><dl class="confirm-details"><dt>下单账户</dt><dd>{{ snapshot.accountLabel || snapshot.account }}</dd><template v-if="snapshot.framework"><dt>客户框架</dt><dd>{{ snapshot.framework }}</dd></template><template v-if="snapshot.executionChannel"><dt>上手方</dt><dd>{{ snapshot.counterparty || '线下单' }}</dd></template><template v-if="snapshot.algorithmParams"><dt>执行时间</dt><dd>{{ snapshot.algorithmParams.executionTime?.[0] || '系统提交时间' }} - {{ snapshot.algorithmParams.executionTime?.[1] || '标的收盘时间' }}</dd><dt>市场成交占比</dt><dd>{{ snapshot.algorithmParams.participation }}%</dd></template><template v-if="snapshot.inputAmount !== null"><dt>订单金额</dt><dd>{{ money(snapshot.inputAmount) }} CNY</dd></template><dt>订单类型</dt><dd><span class="order-confirm-tag">{{ snapshot.executionType === 'highTouch' ? '手工单' : '系统单' }}</span></dd><dt>执行算法</dt><dd><span class="order-confirm-tag">{{ algorithmDisplay(snapshot.algorithm) }}</span></dd><dt>订单方式</dt><dd><span class="order-confirm-tag">{{ snapshot.type === 'limit' ? '限价单' : '市价单' }}</span></dd><template v-if="snapshot.note"><dt>备注</dt><dd>{{ snapshot.note }}</dd></template></dl></template><template #footer><DialogActions cancel-text="返回" :confirm-text="`确认${snapshot?.side === 'buy' ? '买入' : '卖出'}`" @cancel="confirming = false" @confirm="submit"/></template></BaseDialog>
   <BaseDialog v-model="manualInstrumentVisible" title="手动新增标的" width="400px" align-center append-to-body class="variant-confirm manual-instrument-dialog" :close-on-press-escape="false"><p class="manual-instrument-notice">您正在添加非标准标的，请确认标的名称、代码和市场。</p><div class="manual-instrument-form"><label>标的名称<el-input v-model="manualInstrumentName" placeholder="请输入标的名称" /></label><label>标的代码<el-input v-model="manualInstrumentCode" placeholder="请输入标的代码" /></label><label>所属市场<el-select v-model="manualInstrumentMarket" aria-label="所属市场" popper-class="variant-popper"><el-option v-for="item in manualInstrumentMarketOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></label><p v-if="manualInstrumentError" class="manual-instrument-error" role="alert">{{ manualInstrumentError }}</p></div><template #footer><el-button @click="manualInstrumentVisible = false">取消[Esc]</el-button><el-button type="primary" @click="saveManualInstrument">新增标的[Enter]</el-button></template></BaseDialog>
 </template>
 

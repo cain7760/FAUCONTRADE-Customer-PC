@@ -117,14 +117,17 @@ function selectDma() {
   margin-top: 16px;
 }
 .pov-parameters-popper .algorithm-param-row {
-  margin-top: 0;
+  margin-top: -6px;
 }
 .pov-parameters-popper .algorithm-param-row > span,
 .pov-parameters-popper .algorithm-param-input i,
-.pov-parameters-popper .algorithm-param-input small,
 .pov-parameters-popper .algorithm-param-input .el-input__inner {
   color: #fff;
   font-size: 12px;
+}
+.pov-parameters-popper .algorithm-param-input small {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
 }
 .pov-parameters-popper .algorithm-menu-actions {
   justify-content: center;

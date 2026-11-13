@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isValidPovDuration, povDeadline, povDeadlineText, povOrderTimeError } from './povSchedule.js'
+import { isValidPovDuration, povDeadline, povDeadlineText, povOrderTimeError, povParametersError, resolvePovExecutionTime } from './povSchedule.js'
+import { executionShortcut, executionTimeBounds, executionTimeError, executionDurationMinutes } from './executionSchedule.js'
 const end = (market, now, hours = 1, minutes = 0, extra = {}) => povDeadline({ market, ...extra }, hours, minutes, new Date(now))
 
 test('POV下单截止精确到秒：A股14:57起，港股16:00起', () => {
@@ -85,4 +86,33 @@ test('最大时长覆盖美股完整常规交易日，其他市场仍按收盘�
   assert.equal(end('US', '2026-11-02T09:30:00-05:00',6,30).end,'16:00:00')
   assert.equal(end('HK', '2026-11-02T09:30:00+08:00',6,30).end,'16:10:00')
   assert.equal(end('SZ', '2026-11-02T09:30:00+08:00',6,30).end,'15:00:00')
+})
+
+
+test('POV 参数允许全天选时，收盘后可确认，快捷时长不截断至收盘', () => {
+  const item = { market: 'SZ' }
+  const now = new Date('2026-11-12T17:00:00+08:00')
+  assert.deepEqual(executionTimeBounds(item, now, true, true).windows, [[0, 1439]])
+  for (const range of [['08:00', '09:00'], ['12:00', '13:00'], ['17:10', '18:10']]) {
+    assert.equal(povParametersError(item, { executionTime: range, participation: 10 }, now, true), '')
+    assert.equal(executionDurationMinutes(item, range, now, true, true), 60)
+  }
+  assert.deepEqual(executionShortcut(item, 60, new Date('2026-11-12T14:40:00+08:00'), 3, true, true), ['14:43', '15:43'])
+  assert.deepEqual(executionShortcut(item, 10, now, 3, true, true), ['17:03', '17:13'])
+  assert.match(povParametersError(item, { executionTime: ['18:00', '17:00'], participation: 10 }, now, true), /晚于/)
+  assert.match(executionTimeError(item, ['17:10', '18:10'], now), /交易时段/)
+})
+
+
+test('POV开始和结束均可留空，按提交时间及市场收盘时间补齐', () => {
+  const now = new Date('2026-11-12T10:00:25+08:00')
+  for (const range of [null, ['', ''], ['10:30', ''], ['', '14:30']]) {
+    assert.equal(povParametersError({ market: 'A' }, { executionTime: range, participation: 10 }, now, true), '')
+  }
+  assert.deepEqual(resolvePovExecutionTime({ market: 'A' }, null, now), ['10:00:25', '15:00:00'])
+  assert.deepEqual(resolvePovExecutionTime({ market: 'HK' }, ['', ''], now), ['10:00:25', '16:10:00'])
+  assert.deepEqual(resolvePovExecutionTime({ market: 'A' }, ['10:30', ''], now), ['10:30:00', '15:00:00'])
+  assert.deepEqual(resolvePovExecutionTime({ market: 'A' }, ['', '14:30'], now), ['10:00:25', '14:30:00'])
+  assert.deepEqual(resolvePovExecutionTime({ market: 'HK', sessionCloseAt: '2026-11-12T16:08:23+08:00' }, null, now), ['10:00:25', '16:08:23'])
+  assert.deepEqual(resolvePovExecutionTime({ market: 'A' }, null, new Date('2026-11-12T10:01:40+08:00')), ['10:01:40', '15:00:00'])
 })

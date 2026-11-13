@@ -1,9 +1,9 @@
 <script setup>
 import ExecutionTimeRange from '../../../components/trading/ExecutionTimeRange.vue'
 import ExecutionAlgorithmTabs from '../../../components/trading/ExecutionAlgorithmTabs.vue'
-import { executionShortcut, executionDurationMinutes } from '../../../domain/orders/executionSchedule.js'
+import { executionDurationMinutes } from '../../../domain/orders/executionSchedule.js'
 import { tradingTimeErrorKey } from '../../../composables/useTradingTime.js'
-import { isValidPovDuration, povParametersError } from '../../../domain/orders/povSchedule.js'
+import { isValidPovDuration, povParametersError, resolvePovExecutionTime } from '../../../domain/orders/povSchedule.js'
 import { inject, computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowUp, InfoFilled } from '@element-plus/icons-vue'
@@ -144,18 +144,19 @@ function stepPrice(direction) {
 function openAlgorithmConfig() {
   algorithmConfigTouched.value = false
   algorithmConfigNow.value = new Date()
-  draftPovExecutionTime.value = povExecutionTime.value?.slice()
-    || executionShortcut(orderInstrument.value, Number(povHours.value) * 60 + Number(povMinutes.value), algorithmConfigNow.value, 3, true)
+  draftPovExecutionTime.value = povExecutionTime.value?.slice() || ['', '']
   draftPovParticipation.value = povParticipation.value
 }
 function cancelAlgorithmConfig() { algorithmPopoverVisible.value = false }
 function confirmAlgorithmConfig() {
   algorithmConfigNow.value = new Date()
   if (draftPovParameterError.value) return
-  povExecutionTime.value = draftPovExecutionTime.value.slice()
-  const duration = executionDurationMinutes(orderInstrument.value, povExecutionTime.value, algorithmConfigNow.value, true)
-  povHours.value = Math.floor(duration / 60)
-  povMinutes.value = duration % 60
+  povExecutionTime.value = draftPovExecutionTime.value?.slice() || ['', '']
+  const duration = executionDurationMinutes(orderInstrument.value, povExecutionTime.value, algorithmConfigNow.value, true, true)
+  if (duration > 0) {
+    povHours.value = Math.floor(duration / 60)
+    povMinutes.value = duration % 60
+  }
   povParticipation.value = draftPovParticipation.value
   algorithmPopoverVisible.value = false
 }
@@ -167,13 +168,18 @@ function submit() {
   if (scheduleError) { formError.value = scheduleError; return }
   const timeError = tradingTimeError()
   if (timeError) { ElMessage.error(timeError); return }
+  const executionTime = algorithm.value === 'POV' ? resolvePovExecutionTime(orderInstrument.value, povExecutionTime.value) : null
+  if (executionTime && (!executionTime[0] || !executionTime[1] || executionTime[0] >= executionTime[1])) {
+    formError.value = '结束时间须晚于开始时间'
+    return
+  }
   emit('submit', {
     orderId: props.order.id, orderNo: props.order.orderNo,
     executionType: executionType.value, side: side.value, type: orderType.value,
     price: isMarket.value ? null : Number(price.value), quantity: nextQuantity.value,
     inputAmount: usesAmount.value ? Number(amount.value) : null,
     algorithm: algorithm.value,
-    algorithmParams: algorithm.value === 'POV' ? { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value), executionTime: povExecutionTime.value?.slice() || null } : null,
+    algorithmParams: algorithm.value === 'POV' ? { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value), executionTime } : null,
     note: note.value.trim(), originalPrice: originalPrice.value,
     originalQuantity: originalQuantity.value, quantityDelta: quantityDelta.value, operation: operation.value,
   })
@@ -215,7 +221,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
               <div class="execution-algorithm-menu">
                 <span>POV 参数</span>
                 <div class="algorithm-popper-params" aria-label="POV 参数">
-                  <ExecutionTimeRange v-model="draftPovExecutionTime" :item="orderInstrument" market-hours hide-two-hour @update:model-value="algorithmConfigTouched = true" />
+                  <ExecutionTimeRange v-model="draftPovExecutionTime" :item="orderInstrument" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
                   <div class="algorithm-param-row">
                     <span>市场成交占比</span>
                     <div class="algorithm-param-input is-participation">
