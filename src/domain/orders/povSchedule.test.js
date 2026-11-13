@@ -1,7 +1,42 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { isValidPovDuration, povDeadline, povDeadlineText } from './povSchedule.js'
+import { isValidPovDuration, povDeadline, povDeadlineText, povOrderTimeError } from './povSchedule.js'
 const end = (market, now, hours = 1, minutes = 0, extra = {}) => povDeadline({ market, ...extra }, hours, minutes, new Date(now))
+
+test('POV下单截止精确到秒：A股14:57起，港股16:00起', () => {
+  for (const [market, before, cutoff] of [
+    ['SZ', '14:56:59', '14:57:00'],
+    ['SH', '14:56:59', '14:57:00'],
+    ['BJ', '14:56:59', '14:57:00'],
+    ['HK', '15:59:59', '16:00:00'],
+  ]) {
+    const order = { market, algorithm: 'POV', executionType: 'lowTouch' }
+    assert.equal(povOrderTimeError(order, new Date(`2026-11-12T${before}+08:00`)), '')
+    assert.equal(povOrderTimeError(order, new Date(`2026-11-12T${cutoff}+08:00`)), '当前时段不支持POV下单。')
+    assert.equal(povOrderTimeError(order, new Date('2026-11-12T17:00:00+08:00')), '当前时段不支持POV下单。')
+  }
+})
+
+test('POV下单按标的市场时区判断，兼容市场别名与证券代码后缀', () => {
+  const now = new Date('2026-11-11T22:57:00-08:00')
+  for (const symbol of [{ market: 'A' }, { market: 'SSE' }, { code: '000001.SZ' }]) {
+    assert.equal(povOrderTimeError({ ...symbol, algorithm: 'POV' }, now), '当前时段不支持POV下单。')
+  }
+  assert.equal(povOrderTimeError({ market: 'HKEX', algorithm: 'POV' }, now), '')
+  assert.equal(povOrderTimeError({ code: '00700.HK', algorithm: 'POV' }, new Date('2026-11-12T08:00:00Z')), '当前时段不支持POV下单。')
+})
+
+test('POV截止校验保持其他算法、手工单与其他市场规则', () => {
+  const now = new Date('2026-11-12T17:00:00+08:00')
+  for (const order of [
+    { market: 'SZ', algorithm: 'DMA' },
+    { market: 'HK', algorithm: 'none' },
+    { market: 'SZ', algorithm: 'POV', executionType: 'highTouch' },
+    { market: 'US', algorithm: 'POV' },
+    { market: 'unknown', algorithm: 'POV' },
+  ]) assert.equal(povOrderTimeError(order, now), '')
+  assert.equal(povOrderTimeError({ market: 'SZ', algorithm: 'POV' }, new Date('invalid')), '')
+})
 
 test('当前时间精确到秒，运行一小时保留秒数', () => {
   assert.equal(end('SZ', '2026-11-02T10:00:25+08:00').end, '11:00:25')

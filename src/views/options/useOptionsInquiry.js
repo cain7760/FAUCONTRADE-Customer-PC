@@ -127,6 +127,7 @@ function placeOrder(payload) {
     quotedAt: currentQuote.quotedAt,
     quoteCapacity: currentQuote.capacity,
     traderRemark: currentQuote.traderRemark || '',
+    requiresTraderHandling: payload.requiresTraderHandling === true,
     remark: String(remark).trim(),
   }
   openingOrders.value.unshift(order)

@@ -1,9 +1,11 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
 import { ArrowDown, ArrowUp, Search, Tickets } from '@element-plus/icons-vue'
+import OptionDirectionBadge from './OptionDirectionBadge.vue'
+import OptionAssetSummary from './OptionAssetSummary.vue'
 import InstrumentSearchHistory from '../../components/trading/InstrumentSearchHistory.vue'
 import { createInquiryFormDraft, instruments, validateInquiry } from './inquiryModel.js'
-const props = defineProps({ paused: Boolean })
+const props = defineProps({ paused: Boolean, context: { type: Object, required: true }, account: { type: Object, required: true } })
 const emit = defineEmits(['submit', 'batch'])
 const draft = reactive(createInquiryFormDraft())
 const codes = ref([]), advanced = ref(false)
@@ -122,7 +124,7 @@ const rules = [
   <section ref="ticketRoot" class="option-inquiry-ticket" aria-label="期权询价面板">
     <header class="option-ticket-heading"><strong>期权询价</strong><el-button link :icon="Tickets" :disabled="paused" @click="emit('batch')">批量询价</el-button></header>
     <form class="option-inquiry-body" novalidate @submit.prevent="submit">
-      <div class="inquiry-field inquiry-direction-field"><span>期权方向</span><span class="inquiry-direction-tag">看涨</span></div>
+      <div class="inquiry-field inquiry-direction-field"><span>期权方向</span><OptionDirectionBadge class="inquiry-direction-tag" /></div>
       <div class="inquiry-field">
         <label for="option-instrument">选择标的</label>
         <el-select id="option-instrument" ref="instrumentInput" :model-value="codes" multiple filterable clearable collapse-tags collapse-tags-tooltip :max-collapse-tags="1" :fit-input-width="true" :tag-tooltip="selectedTagTooltip"
@@ -145,11 +147,12 @@ const rules = [
       <el-button class="inquiry-submit" native-type="submit" type="primary" :disabled="props.paused">提交询价</el-button>
       <el-button class="inquiry-reset" link @click="reset">重置</el-button>
     </form>
+    <OptionAssetSummary :context="context" :account="account" />
   </section>
 </template>
 <style scoped>
 .inquiry-field.inquiry-direction-field{flex-direction:row;align-items:center;gap:8px;line-height:20px;color:var(--el-text-color-regular)}
-.inquiry-direction-tag{margin-left:auto;display:inline-flex;align-items:center;padding:1px 8px;border-radius:3px;background:#a34f5c;color:#fff;font-size:12px}
+.inquiry-direction-tag{margin-left:auto}
 
 .option-ticket-heading .el-button.is-disabled{color:var(--el-text-color-disabled)}
 .inquiry-size-input.selected :deep(.el-input__wrapper){box-shadow:0 0 0 1px var(--el-color-primary) inset;background:#363125}
@@ -164,7 +167,8 @@ const rules = [
 .instrument-clear{display:grid;place-items:center;padding:0;border:0;background:none;color:var(--el-text-color-secondary);cursor:pointer}
 .instrument-clear:hover{color:var(--el-text-color-primary)}
 
-.option-inquiry-ticket{display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px}.option-ticket-heading{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--el-border-color-light);flex:none}.option-ticket-heading strong{font-size:14px}.option-ticket-heading .el-button{color:var(--el-color-primary);font-size:12px}.option-inquiry-body{overflow:auto;padding:14px;display:flex;flex-direction:column;gap:16px;min-height:0}.inquiry-field{display:flex;flex-direction:column;gap:8px}.inquiry-field>label{display:flex;align-items:center;justify-content:space-between;color:var(--el-text-color-regular);line-height:18px}.inquiry-field>label span{font-size:11px;color:var(--el-text-color-secondary)}.inquiry-field .el-input-number{width:100%}.option-direction,.inquiry-choices{display:flex;gap:6px}.option-direction button,.inquiry-choices button{flex:1;min-width:0;border:1px solid var(--el-border-color);background:var(--el-fill-color-light);color:var(--el-text-color-regular);height:32px;border-radius:3px;white-space:nowrap;font-size:12px}.inquiry-choices button.selected{border-color:var(--el-color-primary);color:#e3c269;background:#363125}.inquiry-choices.wraps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.inquiry-choices.wraps>.el-input{min-width:0;width:100%;height:32px}.inquiry-choices.wraps :deep(.el-input__wrapper){padding:0 6px}.inquiry-choices.wraps :deep(.el-input__inner){font-size:12px}.inquiry-custom{display:flex;gap:6px}.inquiry-custom>.el-input,.inquiry-custom>.el-input-number{min-width:0;flex:1}.inquiry-custom .el-button{font-size:12px}.inquiry-advanced{display:flex;justify-content:space-between;align-items:center;background:none;border:0;border-top:1px solid var(--el-border-color-light);padding:12px 0 0;color:var(--el-text-color-secondary);font-size:12px}.inquiry-advanced span{display:flex;gap:6px;align-items:center}.inquiry-error{margin:0;color:var(--el-color-danger);font-size:12px}.inquiry-submit{--el-button-text-color:#fff;--el-button-hover-text-color:#fff;--el-button-active-text-color:#fff;color:#fff;height:36px;width:100%;margin:0;font-weight:600}.inquiry-reset{align-self:center;margin:0!important;font-size:12px}.inquiry-field :deep(.el-input__wrapper),.inquiry-field :deep(.el-select__wrapper){min-height:var(--trading-instrument-height,32px);background:var(--el-fill-color-blank)}
+.option-inquiry-ticket{display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px}.option-ticket-heading{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;border-bottom:1px solid var(--el-border-color-light);flex:none}.option-ticket-heading strong{font-size:14px}.option-ticket-heading .el-button{color:var(--el-color-primary);font-size:12px}.option-inquiry-body{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:16px;min-height:0}.inquiry-field{display:flex;flex-direction:column;gap:8px}.inquiry-field>label{display:flex;align-items:center;justify-content:space-between;color:var(--el-text-color-regular);line-height:18px}.inquiry-field>label span{font-size:11px;color:var(--el-text-color-secondary)}.inquiry-field .el-input-number{width:100%}.option-direction,.inquiry-choices{display:flex;gap:6px}.option-direction button,.inquiry-choices button{flex:1;min-width:0;border:1px solid var(--el-border-color);background:var(--el-fill-color-light);color:var(--el-text-color-regular);height:32px;border-radius:3px;white-space:nowrap;font-size:12px}.inquiry-choices button.selected{border-color:var(--el-color-primary);color:#e3c269;background:#363125}.inquiry-choices.wraps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.inquiry-choices.wraps>.el-input{min-width:0;width:100%;height:32px}.inquiry-choices.wraps :deep(.el-input__wrapper){padding:0 6px}.inquiry-choices.wraps :deep(.el-input__inner){font-size:12px}.inquiry-custom{display:flex;gap:6px}.inquiry-custom>.el-input,.inquiry-custom>.el-input-number{min-width:0;flex:1}.inquiry-custom .el-button{font-size:12px}.inquiry-advanced{display:flex;justify-content:space-between;align-items:center;background:none;border:0;border-top:1px solid var(--el-border-color-light);padding:12px 0 0;color:var(--el-text-color-secondary);font-size:12px}.inquiry-advanced span{display:flex;gap:6px;align-items:center}.inquiry-error{margin:0;color:var(--el-color-danger);font-size:12px}.inquiry-submit{--el-button-text-color:#fff;--el-button-hover-text-color:#fff;--el-button-active-text-color:#fff;color:#fff;height:36px;width:100%;margin:0;font-weight:600}.inquiry-reset{align-self:center;margin:0!important;font-size:12px}.inquiry-field :deep(.el-input__wrapper),.inquiry-field :deep(.el-select__wrapper){min-height:var(--trading-instrument-height,32px);background:var(--el-fill-color-blank)}
+.inquiry-choices.inquiry-numeric-choices button,.inquiry-choices.inquiry-numeric-choices :deep(.el-input__inner){font-size:14px}
 </style>
 
 <style>

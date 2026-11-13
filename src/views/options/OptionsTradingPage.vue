@@ -14,10 +14,11 @@ import OptionInquiryForm from './OptionInquiryForm.vue'
 import OptionInquiryRecords from './OptionInquiryRecords.vue'
 import ReinquiryAnnotation from './ReinquiryAnnotation.vue'
 import OptionOrderTicket from './OptionOrderTicket.vue'
+import OptionDirectionBadge from './OptionDirectionBadge.vue'
 import OptionOrderConfirmation from './OptionOrderConfirmation.vue'
 import { entryModeLabels, validateOptionOrder } from './optionOrderModel.js'
 import OptionsRecordFilters from './OptionsRecordFilters.vue'
-import { inquiryStatusLabel, matchesInquiryFilter } from './inquiryModel.js'
+import { calculateOptionFee, inquiryStatusLabel, matchesInquiryFilter } from './inquiryModel.js'
 import { useOptionsInquiry } from './useOptionsInquiry.js'
 const BatchInquiryDialog = defineAsyncComponent(() => import('./BatchInquiryDialog.vue'))
 const props = defineProps({ context: {type:Object,required:true}, paused: Boolean, downloadCsv: { type: Function, required: true } })
@@ -36,6 +37,28 @@ const batchVisible = ref(false)
 const reinquiryIds = ref([]), reinquiryVisible = ref(false), reinquirySubmitting = ref(false)
 const activeTab = ref('inquiries'), selectedQuote = ref(null), selectedOrderId = ref(''), submitting = ref(false)
 const orderSnapshot = ref(null)
+const insufficientFundsSnapshot = ref(null)
+const insufficientFundsVisible = computed(() => !!insufficientFundsSnapshot.value)
+function hasInsufficientFunds(payload) {
+  const feeInCny = calculateOptionFee(payload.principal, payload.quote.rate) * props.context.cnyExchangeRate(payload.item.currency)
+  return Number(optionAccount.value.availableBalance) < feeInCny
+}
+function cancelInsufficientFunds() { insufficientFundsSnapshot.value = null }
+async function continueWithTrader() {
+  if (!insufficientFundsSnapshot.value || props.paused) return
+  try {
+    ensureTradingTime()
+    const snapshot = insufficientFundsSnapshot.value
+    cancelInsufficientFunds()
+    // 下一轮再展示确认，避免同一次 Enter 同时触发最终提交。
+    await nextTick()
+    orderSnapshot.value = { ...snapshot, requiresTraderHandling: true }
+  } catch (error) { ElMessage.warning(error.message) }
+}
+useDialogShortcuts(insufficientFundsVisible, {
+  confirm: continueWithTrader, cancel: cancelInsufficientFunds,
+  ignoreEnterFrom: 'button, a, [role="button"]',
+})
 const onlyBest = ref(false), latestFirst = ref(true), inquiryTable = ref(null)
 const today = () => new Date().toLocaleDateString('sv-SE')
 const emptyFilters = () => ({ symbol: '', dates: [today(), today()], direction: '', tenor: [], knockout: [], exercise: [], dividend: [], structure: [], status: '' })
@@ -127,7 +150,9 @@ function submitOrder(payload) {
     const error = validateOptionOrder(payload)
     if (error) throw new Error(error)
     // 预览使用独立快照，后台报价更新或重询不能悄悄改变客户待确认的信息。
-    orderSnapshot.value = JSON.parse(JSON.stringify(payload))
+    const snapshot = JSON.parse(JSON.stringify(payload))
+    if (hasInsufficientFunds(snapshot)) insufficientFundsSnapshot.value = snapshot
+    else orderSnapshot.value = snapshot
   } catch (error) { ElMessage.warning(error.message) }
 }
 async function confirmOrder() {
@@ -135,6 +160,11 @@ async function confirmOrder() {
   submitting.value = true
   try {
     ensureTradingTime()
+    if (!orderSnapshot.value.requiresTraderHandling && hasInsufficientFunds(orderSnapshot.value)) {
+      insufficientFundsSnapshot.value = orderSnapshot.value
+      orderSnapshot.value = null
+      return
+    }
     const order = placeOrder(orderSnapshot.value)
     orderSnapshot.value = null
     selectedOrderId.value = order.id
@@ -174,7 +204,7 @@ function exportRecords() {
           <el-table-column type="index" label="序号" width="44" align="center"/>
           <el-table-column v-for="[key,label] in visibleOrderColumns.map(key => orderColumns.find(([id]) => id === key)).filter(Boolean)" :key="key" :prop="key" :label="label" :min-width="({name:90,code:80,status:80,direction:76,structure:110,principal:114,rate:86,optionFee:120,currency:64,entryMode:86,knockout:98,exercise:96,dividend:120,orderNo:190,submittedAt:158,remark:150})[key]" :align="['principal','rate','optionFee'].includes(key) ? 'right' : 'left'" show-overflow-tooltip>
             <template #header><SortHeader v-if="['principal','rate','optionFee'].includes(key)" :label="label" numeric :direction="orderSort.key === key ? orderSort.direction : null" @sort="toggleSort(key)"/><span v-else>{{ label }}</span></template>
-            <template #default="{row}"><span v-if="key === 'status'" class="order-status is-pending">{{ row.status }}</span><span v-else :class="key === 'direction' ? row.direction === 'call' ? 'up' : 'down' : ''">{{ orderValue(row,key) }}</span></template>
+            <template #default="{row}"><span v-if="key === 'status'" class="order-status is-pending">{{ row.status }}</span><OptionDirectionBadge v-else-if="key === 'direction'" :direction="row.direction" /><span v-else>{{ orderValue(row,key) }}</span></template>
           </el-table-column>
           <el-table-column width="24" fixed="right" class-name="column-config-column"><template #header><ColumnConfigPopover v-model="visibleOrderColumns" :options="orderColumns" :defaults="orderColumns.map(([key]) => key)"/></template></el-table-column>
         </TradingTable>
@@ -182,8 +212,12 @@ function exportRecords() {
       <TradingTable v-else :data="[]" height="100%" :empty-text="activeTab === 'positions' ? '暂无期权持仓' : '暂无平仓委托'"><el-table-column label="证券名称"/><el-table-column label="结构 / 期限"/><el-table-column label="名义本金(万)"/><el-table-column label="币种"/></TradingTable>
       <footer class="options-table-footer">{{ activeTab === 'inquiries' ? `共 ${filteredItems.length} 个询价组合` : activeTab === 'opening' ? `共 ${filteredOrders.length} 条开仓委托` : '共 0 条' }}</footer>
     </section>
-    <aside class="workspace-panel options-ticket-pane"><OptionOrderTicket v-if="selectedQuote" :key="selectedQuote.quote.id" :item="selectedQuote.item" :quote="selectedQuote.quote" :context="context" :account="optionAccount" :paused="paused" @back="selectedQuote = null" @submit="submitOrder"/><OptionInquiryForm v-else :paused="paused" @submit="requestInquiry" @batch="batchVisible=true"/></aside>
+    <aside class="workspace-panel options-ticket-pane"><OptionOrderTicket v-if="selectedQuote" :key="selectedQuote.quote.id" :item="selectedQuote.item" :quote="selectedQuote.quote" :context="context" :account="optionAccount" :paused="paused" @back="selectedQuote = null" @submit="submitOrder"/><OptionInquiryForm v-else :context="context" :account="optionAccount" :paused="paused" @submit="requestInquiry" @batch="batchVisible=true"/></aside>
     <BatchInquiryDialog v-if="batchVisible" v-model="batchVisible" :paused="paused" :submit-batch="requestBatchInquiry"/>
+    <BaseDialog :model-value="insufficientFundsVisible" title="可用资金不足" width="460px" align-center append-to-body class="variant-confirm option-funds-confirm" :close-on-click-modal="false" :close-on-press-escape="false" @update:model-value="value => !value && cancelInsufficientFunds()">
+      <p>可用资金不足，是否需要转交易员处理继续下单（此操作下交易员可能会联系您进行其他资金安排）</p>
+      <template #footer><DialogActions cancel-text="取消[Esc]" confirm-text="继续提交[Enter]" :confirm-disabled="paused" @cancel="cancelInsufficientFunds" @confirm="continueWithTrader" /></template>
+    </BaseDialog>
     <OptionOrderConfirmation :snapshot="orderSnapshot" :loading="submitting" :paused="paused" @cancel="orderSnapshot = null" @confirm="confirmOrder" />
     <BaseDialog v-model="reinquiryVisible" title="确认重询" width="420px" align-center class="variant-confirm option-reinquiry-confirm" :close-on-click-modal="false" :close-on-press-escape="!reinquirySubmitting">
       <p>将按所选组参数发起新一轮询价，原询价将失效且不可下单，记录保留。是否继续？</p>
@@ -214,9 +248,14 @@ function exportRecords() {
 .options-workspace :deep(.option-quote-table td.is-right>.cell),
 .options-workspace :deep(.option-principal-input .el-input__inner),
 .options-workspace :deep(.option-order-estimates b),
-.options-workspace :deep(.options-opening-table td.is-right>.cell){font-family:var(--ft-font-numeric, 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif);font-variant-numeric:tabular-nums}
+.options-workspace :deep(.options-opening-table td.is-right>.cell){font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums}
 
-.options-workspace :deep(.option-reinquire){height:24px;padding:0 10px;border:1px solid var(--el-color-primary);border-radius:3px;color:var(--el-color-primary);background:transparent;font-size:12px;font-weight:400;cursor:pointer}
+/* 与权益交易 13px 数值保持一致，表头继续使用原文本字号。 */
+.options-workspace :deep(.inquiry-size-value),
+.options-workspace :deep(td.inquiry-capacity-column>.cell),
+.options-workspace :deep(.options-opening-table td.is-right>.cell){font-size:13px;font-weight:500;}
+
+.options-workspace :deep(.option-reinquire){height:22px;padding:0 10px;border:1px solid var(--el-color-primary);border-radius:3px;color:var(--el-color-primary);background:transparent;font-size:12px;font-weight:400;cursor:pointer}
 .options-workspace :deep(.option-reinquire:disabled){opacity:.45;cursor:not-allowed}
 .options-workspace :deep(.option-reinquire:hover:not(:disabled)){background:#bb984a18}
 

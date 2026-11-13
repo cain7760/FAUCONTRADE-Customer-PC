@@ -6,6 +6,7 @@ import DialogActions from '../../components/DialogActions.vue'
 import OutlineActionButton from '../../components/OutlineActionButton.vue'
 import TradingTable from '../../components/trading/TradingTable.vue'
 import SortHeader from '../../components/trading/SortHeader.vue'
+import OptionDirectionBadge from './OptionDirectionBadge.vue'
 import { useDialogShortcuts } from '../../composables/useDialogShortcuts'
 import { batchColumns, maxBatchRows, parseBatchWorkbook, validateBatchRows } from './batchInquiryExcel.js'
 const baseUrl = import.meta.env.BASE_URL
@@ -79,7 +80,7 @@ useDialogShortcuts(computed(() => props.modelValue), {
       <el-icon><UploadFilled/></el-icon><strong>{{reading ? '正在读取文件…' : '点击上传，或将文件拖拽至此区域'}}</strong><span>支持 .xls、.xlsx，最多 {{maxBatchRows}} 条，文件不超过 5MB</span>
     </div>
     <TradingTable v-else class="batch-preview-table" table-layout="fixed" :data="previewRows" row-key="id" height="100%" :row-class-name="({row})=>row.errors.length?'batch-invalid-row':''">
-      <el-table-column v-for="[key,label] in batchColumns" :key="key" :prop="key" :label="label" :class-name="['size','strike','tenor'].includes(key) ? 'batch-numeric-column' : ''" :fixed="['name','code'].includes(key)?'left':false" :width="columnWidths[key]" align="left" header-align="left" show-overflow-tooltip><template #header><span v-if="['name','code'].includes(key)">{{label}}</span><SortHeader v-else :label="label" :numeric="['size','strike','tenor'].includes(key)" :direction="sort.key === key ? sort.direction : null" @sort="toggleSort(key)"/></template></el-table-column>
+      <el-table-column v-for="[key,label] in batchColumns" :key="key" :prop="key" :label="label" :class-name="['size','strike','tenor'].includes(key) ? 'batch-numeric-column' : ''" :fixed="['name','code'].includes(key)?'left':false" :width="columnWidths[key]" align="left" header-align="left" show-overflow-tooltip><template #header><span v-if="['name','code'].includes(key)">{{label}}</span><SortHeader v-else :label="label" :numeric="['size','strike','tenor'].includes(key)" :direction="sort.key === key ? sort.direction : null" @sort="toggleSort(key)"/></template><template #default="{row}"><OptionDirectionBadge v-if="key === 'direction' && row.direction === '看涨'" /><span v-else>{{row[key]}}</span></template></el-table-column>
       <el-table-column label="校验结果" width="144" align="left" header-align="left" show-overflow-tooltip><template #header><SortHeader label="校验结果" :direction="sort.key === 'errors' ? sort.direction : null" @sort="toggleSort('errors')"/></template><template #default="{row}"><span :class="{'batch-error-text':row.errors.length}">{{row.errors.join('；') || '通过'}}</span></template></el-table-column>
       <el-table-column label="操作" width="56" fixed="right" align="center"><template #default="{row}"><el-button link type="primary" :disabled="submitting" @click="rows=rows.filter(item=>item.id!==row.id)">移除</el-button></template></el-table-column>
     </TradingTable>
@@ -102,7 +103,7 @@ useDialogShortcuts(computed(() => props.modelValue), {
 .batch-upload-area{flex:1;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:1px dashed #555d68;background:var(--el-fill-color-light);cursor:pointer;color:var(--el-text-color-secondary)}.batch-upload-area>.el-icon{font-size:42px}.batch-upload-area strong{font-size:14px;font-weight:400;color:var(--el-text-color-regular)}.batch-upload-area.is-dragging{border-color:var(--el-color-primary);background:#353126}.batch-import-footnote{margin:12px 0 0;color:var(--el-text-color-secondary)}
 .batch-preview-table{--el-table-bg-color:#1e2023;--el-table-tr-bg-color:#1e2023;--el-table-header-bg-color:#25282d;--el-table-row-hover-bg-color:#2c3036;--el-table-border-color:#30343a;--el-table-text-color:#c2c6ce;--el-table-header-text-color:#969eaa;font-size:12px}.batch-preview-table .batch-invalid-row{--el-table-tr-bg-color:#302328}.batch-preview-table .el-button{font-size:12px}
 .batch-preview-table.el-table{flex:1;min-height:0}
-.batch-preview-table td.batch-numeric-column>.cell{font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums}
+.batch-preview-table td.batch-numeric-column>.cell{font-size:13px;font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums;font-weight:500;}
 /* auto 布局将表头放进 body，固定列在所有横向滚动位置都使用同一表头背景。 */
 .batch-preview-table.el-table th.el-table-fixed-column--left,.batch-preview-table.el-table th.el-table-fixed-column--right{background:var(--el-table-header-bg-color)}
 .batch-preview-table.el-table td.el-table-fixed-column--left,.batch-preview-table.el-table td.el-table-fixed-column--right{background:var(--el-table-tr-bg-color)}

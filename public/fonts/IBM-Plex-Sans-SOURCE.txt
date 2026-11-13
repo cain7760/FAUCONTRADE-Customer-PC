@@ -1,0 +1,5 @@
+IBM Plex Sans
+Source: https://github.com/IBM/plex
+Package: @ibm/plex-sans 1.1.0
+License: SIL Open Font License 1.1 (IBM-Plex-Sans-LICENSE.txt)
+Files: complete WOFF2, Regular 400 / Medium 500 / SemiBold 600 / Bold 700

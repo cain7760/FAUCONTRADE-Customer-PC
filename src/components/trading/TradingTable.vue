@@ -21,4 +21,11 @@ defineExpose({
 .trading-table.el-table td.is-right > .cell{min-width:max-content;overflow:visible;text-overflow:clip}
 /* 自动布局可能超出 Element Plus 按声明列宽计算的宽度，滚动视图必须覆盖实际表宽。 */
 .trading-table.el-table .el-scrollbar__view{min-width:max-content}
+/* 操作列统一高度，包含原生按钮和组件库按钮。 */
+.trading-table.el-table td.operation-column button {
+  box-sizing: border-box;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+}
 </style>

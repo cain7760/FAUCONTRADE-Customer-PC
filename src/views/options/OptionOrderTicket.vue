@@ -1,9 +1,11 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { ArrowDown, ArrowLeft, TrendCharts } from '@element-plus/icons-vue'
+import { ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
+import OptionDirectionBadge from './OptionDirectionBadge.vue'
 import OptionAssetSummary from './OptionAssetSummary.vue'
+import ExecutionTimeRange from '../../components/trading/ExecutionTimeRange.vue'
 import TradingTable from '../../components/trading/TradingTable.vue'
-import { executionTimeBounds, executionTimeError, executionShortcut, isScheduledEntry, quoteHistory, validateOptionOrder } from './optionOrderModel.js'
+import { isScheduledEntry, quoteHistory, validateOptionOrder } from './optionOrderModel.js'
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -18,7 +20,6 @@ const principal = ref()
 const limitPrice = ref()
 const executionTime = ref(null)
 const algorithmMode = ref('twap')
-const shortcutError = ref('')
 const remark = ref('')
 const touched = ref(false)
 
@@ -28,7 +29,6 @@ watch(() => [props.item?.id, props.quote?.id], () => {
   limitPrice.value = undefined
   executionTime.value = null
   algorithmMode.value = 'twap'
-  shortcutError.value = ''
   remark.value = ''
   touched.value = false
 }, { immediate: true })
@@ -53,20 +53,6 @@ const tradingRules = computed(() => [
 ].filter(Boolean).join(' / '))
 const quoteRows = computed(() => quoteHistory(props.quote))
 const scheduled = computed(() => isScheduledEntry(entryMode.value))
-const pickerNow = ref(new Date())
-const pickerBounds = computed(() => executionTimeBounds(props.item, pickerNow.value))
-function prepareTimePicker() {
-  pickerNow.value = new Date()
-  if (!executionTime.value) executionTime.value = executionShortcut(props.item, 10, pickerNow.value, 5)
-}
-function timeDisabled(hour, minute, role) {
-  const value = hour * 60 + minute
-  const { earliest, windows } = pickerBounds.value
-  return value < earliest || !windows.some(([from, to]) => role === 'start'
-    ? value >= from && value < to : value > from && value <= to)
-}
-const disabledMinutes = (hour, role) => Array.from({ length: 60 }, (_, minute) => minute).filter(minute => timeDisabled(hour, minute, role))
-const disabledHours = role => Array.from({ length: 24 }, (_, hour) => hour).filter(hour => disabledMinutes(hour, role).length === 60)
 const quoteTime = computed(() => {
   const value = props.quote?.quotedAt
   if (!value) return '--'
@@ -82,7 +68,6 @@ const principalError = computed(() => {
 const fee = computed(() => Number(principal.value) > 0 && Number.isFinite(Number(props.quote?.rate))
   ? Number(principal.value) * 10000 * Number(props.quote.rate) / 100 : null)
 const priceError = computed(() => entryMode.value === 'limit' && (!Number.isFinite(Number(limitPrice.value)) || Number(limitPrice.value) <= 0) ? '请输入大于 0 的下单价格' : '')
-const timeError = computed(() => scheduled.value ? shortcutError.value || executionTimeError(props.item, executionTime.value, pickerNow.value) : '')
 function orderPayload() {
   return { item: props.item, quote: props.quote, entryMode: entryMode.value,
     principal: Number(principal.value), limitPrice: entryMode.value === 'limit' ? Number(limitPrice.value) : null,
@@ -90,15 +75,7 @@ function orderPayload() {
 }
 const canSubmit = computed(() => !props.paused && props.quote?.rate != null)
 function selectAlgorithm(mode) { algorithmMode.value = mode; entryMode.value = mode }
-function selectShortcut(value) {
-  pickerNow.value = new Date()
-  const range = executionShortcut(props.item, value, pickerNow.value)
-  shortcutError.value = range ? '' : value === 'morning' ? '当前无可用的上午交易时段，请选择其他时间' : '当前无可用交易时段，请选择执行时间'
-  if (range) executionTime.value = range
-  touched.value = true
-}
 function submitOrder() {
-  pickerNow.value = new Date()
   touched.value = true
   if (!canSubmit.value || validateOptionOrder(orderPayload())) return
   emit('submit', orderPayload())
@@ -117,11 +94,11 @@ function submitOrder() {
       <section class="option-contract">
         <div class="option-identity">
           <div><strong>{{ item.name }}</strong><span>{{ displayCode }}</span></div>
-          <span class="option-direction" :class="isCall ? 'is-call' : 'is-put'"><el-icon><TrendCharts /></el-icon>{{ isCall ? '看涨' : '看跌' }}</span>
+          <OptionDirectionBadge :direction="item.direction" />
         </div>
         <dl class="option-terms">
-          <div><dt>期权结构</dt><dd>{{ item.strike }}{{ isCall ? 'C' : 'P' }}</dd></div>
-          <div><dt>期限</dt><dd>{{ item.tenor }}</dd></div>
+          <div><dt>期权结构</dt><dd class="option-numeric">{{ item.strike }}{{ isCall ? 'C' : 'P' }}</dd></div>
+          <div><dt>期限</dt><dd class="option-numeric">{{ item.tenor }}</dd></div>
           <div><dt>规模(万)</dt><dd class="option-numeric">{{ number(item.size) }}</dd></div>
           <div><dt>执行价(%)</dt><dd class="option-numeric">{{ number(item.strike) }}</dd></div>
           <div><dt>结算币种</dt><dd>{{ currency }}</dd></div>
@@ -166,12 +143,7 @@ function submitOrder() {
             <p v-if="principalError && touched" id="option-principal-error" class="option-input-error" role="alert">{{ principalError }}</p>
           </div>
         </section>
-        <section v-if="scheduled">
-          <div class="field-caption"><label class="required">选择时间</label><span class="option-time-hint">建议执行时长：大于10m</span></div>
-          <el-time-picker v-model="executionTime" :disabled-hours="disabledHours" :disabled-minutes="disabledMinutes" @focus="prepareTimePicker" is-range format="HH:mm" value-format="HH:mm" range-separator="-" start-placeholder="开始时间" end-placeholder="结束时间" aria-label="执行时间范围" popper-class="variant-popper option-time-popper" :disabled="paused" @change="shortcutError = ''; touched = true" />
-          <div class="option-time-shortcuts"><button v-for="[value,label] in [[10,'10m'],[20,'20m'],[60,'1h'],[120,'2h'],['morning','到中午收盘'],['close','到下午收盘']]" :key="value" type="button" :disabled="paused" @click="selectShortcut(value)">{{ label }}</button></div>
-          <p v-if="touched && timeError" class="option-input-error" role="alert">{{ timeError }}</p>
-        </section>
+        <ExecutionTimeRange v-if="scheduled" v-model="executionTime" :item="item" :disabled="paused" :show-error="touched" />
         <section>
           <div class="field-caption"><label for="option-order-remark">备注</label></div>
           <el-input id="option-order-remark" v-model="remark" type="textarea" :rows="2" maxlength="200" show-word-limit :disabled="paused" placeholder="请输入" />
@@ -203,9 +175,6 @@ function submitOrder() {
 .option-identity>div { min-width:0; display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 8px; }
 .option-identity strong { color:var(--el-text-color-primary); font-size:16px; font-weight:600; }
 .option-identity>div>span { color:var(--el-text-color-secondary); font-size:12px; }
-.option-direction { display:inline-flex; align-items:center; gap:4px; padding:3px 6px; border-radius:2px; font-size:12px; flex-shrink:0; }
-.option-direction.is-call { color:var(--ft-color-up); background:var(--ft-color-up-surface); }
-.option-direction.is-put { color:var(--ft-color-down); background:var(--ft-color-down-surface); }
 .option-terms { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px 8px; margin:16px 0 0; }
 .option-terms dt { margin:0 0 5px; font-size:12px; }
 .option-terms dd { margin:0; font-weight:500; line-height:1.6; overflow-wrap:anywhere; }
@@ -214,6 +183,8 @@ function submitOrder() {
 .option-quote-heading>span { color:var(--el-text-color-secondary); }
 .option-quote-heading time { font-size:11px; color:var(--el-text-color-secondary); }
 .option-quote-table { border:1px solid var(--el-border-color-light); border-radius:3px; }
+.option-quote-table :deep(.el-table__inner-wrapper::before) { display:none; }
+.option-quote-table :deep(tbody tr:last-child td) { border-bottom:0; }
 .option-trader-remark { margin:10px 0 0; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
 .option-order-form { padding:16px 12px; gap:18px; overflow:visible; }
 .option-order-form .field-caption { margin-bottom:8px; font-size:12px; }
@@ -225,6 +196,12 @@ function submitOrder() {
 .option-principal-input :deep(.el-input__wrapper) { box-shadow:none; background:transparent; }
 .option-principal-input :deep(.el-input__inner) { font-size:16px; }
 .option-input-error { margin:6px 0 0; font-size:12px; line-height:1.5; color:var(--el-color-danger); }
+.option-order-form .trade-buttons .buy-action {
+  --el-button-bg-color:#aa4950;
+  --el-button-border-color:#aa4950;
+  background:#aa4950;
+  border-color:#aa4950;
+}
 .option-submit-section>.el-button { width:100%; height:36px; margin-top:0; font-size:14px; }
 .option-submit-section>.option-input-error { margin:0 0 8px; }
 .option-order-estimates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px; }
@@ -233,24 +210,22 @@ function submitOrder() {
 .option-order-estimates b { font-size:13px; font-weight:500; overflow-wrap:anywhere; }
 
 .required::before{content:'*';color:var(--el-color-danger);margin-right:4px}
-.option-entry-modes{display:flex;width:100%;border:1px solid var(--el-border-color);border-radius:4px;overflow:hidden;height:32px;background:var(--el-fill-color-light)}
+.option-entry-modes{display:flex;width:100%;border-radius:4px;height:32px;background:var(--el-fill-color-light)}
 .option-entry-modes>button,.option-entry-modes>.el-dropdown{flex:1;min-width:0}
-.option-entry-modes button{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:0;border:0;background:transparent;color:var(--el-text-color-regular);font-size:12px;cursor:pointer}
-.option-entry-modes>button+button,.option-entry-modes>.el-dropdown{border-left:1px solid var(--el-border-color)}
-.option-entry-modes button.active{color:var(--el-color-primary);background:var(--ft-color-primary-surface,rgba(187,152,74,.12));box-shadow:inset 0 0 0 1px var(--el-color-primary)}
-.option-entry-modes button:focus-visible{outline:1px solid var(--el-color-primary);outline-offset:-2px}
+.option-entry-modes button{position:relative;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;height:100%;padding:0;border:1px solid var(--el-border-color);background:transparent;color:var(--el-text-color-regular);font-size:12px;cursor:pointer}
+.option-entry-modes>button:first-child{border-radius:4px 0 0 4px}
+.option-entry-modes>.el-dropdown>button{border-radius:0 4px 4px 0}
+.option-entry-modes>button+button,.option-entry-modes>.el-dropdown{margin-left:-1px}
+.option-entry-modes button.active{z-index:1;border-color:var(--el-color-primary);color:var(--el-color-primary);background:var(--ft-color-primary-surface,rgba(187,152,74,.12));box-shadow:none}
+.option-entry-modes button:focus-visible{z-index:2;outline:1px solid var(--el-color-primary);outline-offset:-1px}
 .option-order-amounts{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .option-order-amounts.has-price{grid-template-columns:repeat(2,minmax(0,1fr))}
 .option-order-amounts .el-input-number{width:100%;min-width:0}
-.option-order-amounts :deep(.el-input__inner){text-align:left;font-family:var(--ft-font-numeric, 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif);font-size:14px}
+.option-order-amounts :deep(.el-input__inner){text-align:left;font-family:var(--ft-font-numeric);font-size:14px}
+.option-order-amounts :deep(.el-input__inner::placeholder){font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-weight:400}
 .option-order-amounts :deep(.el-input__wrapper){padding:0 10px;min-height:32px;box-sizing:border-box}
 .option-order-amounts :deep(.is-invalid .el-input__wrapper){box-shadow:0 0 0 1px var(--el-color-danger) inset}
-.option-time-hint{color:var(--el-text-color-secondary);font-size:11px}
-.option-order-form :deep(.el-date-editor.el-input__wrapper){width:100%;height:32px;box-sizing:border-box;background:var(--el-fill-color-blank);box-shadow:0 0 0 1px var(--el-border-color) inset}
-.option-order-form :deep(.el-range-input){background:transparent;color:var(--el-text-color-regular);font-family:var(--ft-font-numeric, 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif);font-size:12px}
-.option-time-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) repeat(2,minmax(0,1.8fr));gap:4px;margin-top:8px}
-.option-time-shortcuts button{min-width:0;white-space:nowrap;height:26px;padding:0 3px;border:1px solid var(--el-border-color);border-radius:3px;background:var(--el-fill-color-light);color:var(--el-text-color-regular);font-size:11px;cursor:pointer}
-.option-time-shortcuts button:hover{border-color:var(--el-color-primary);color:var(--el-color-primary)}
-.option-numeric,.option-order-estimates b{font-family:var(--ft-font-numeric, 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif);font-variant-numeric:tabular-nums}
+.option-numeric{font-size:13px;font-weight:500;}
+.option-numeric,.option-order-estimates b{font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums}
 :global(.option-algorithm-popper){--el-dropdown-menuItem-hover-fill:var(--el-fill-color-light);--el-dropdown-menuItem-hover-color:var(--el-color-primary)}
 </style>

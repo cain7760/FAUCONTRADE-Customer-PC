@@ -22,5 +22,5 @@ const detail = computed(() => deadline.value ? `${deadline.value.date} · ${dead
 
 <style scoped>
 .pov-deadline { margin: 8px 0; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--app-color-text-secondary, #949daa); font-size: 12px; line-height: 18px; }
-.pov-deadline b { color: var(--app-color-text, #c8ced7); font-family: var(--app-font-numeric, var(--ft-font-numeric, inherit)); font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pov-deadline b { font-size: 13px; color: var(--app-color-text, #c8ced7); font-family: var(--app-font-numeric, var(--ft-font-numeric, inherit)); font-weight:500; font-variant-numeric: tabular-nums; white-space: nowrap; }
 </style>

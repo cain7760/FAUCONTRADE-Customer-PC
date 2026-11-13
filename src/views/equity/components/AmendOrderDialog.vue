@@ -1,7 +1,9 @@
 <script setup>
-import PovDeadline from '../../../components/trading/PovDeadline.vue'
+import ExecutionTimeRange from '../../../components/trading/ExecutionTimeRange.vue'
+import ExecutionAlgorithmTabs from '../../../components/trading/ExecutionAlgorithmTabs.vue'
+import { executionShortcut, executionDurationMinutes } from '../../../domain/orders/executionSchedule.js'
 import { tradingTimeErrorKey } from '../../../composables/useTradingTime.js'
-import { isValidPovDuration } from '../../../domain/orders/povSchedule.js'
+import { isValidPovDuration, povParametersError } from '../../../domain/orders/povSchedule.js'
 import { inject, computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowUp, InfoFilled } from '@element-plus/icons-vue'
@@ -19,11 +21,12 @@ const price = ref(null), quantityMode = ref('quantity'), quantity = ref(null), a
 const unit = ref('shares'), amountUnit = ref('yuan')
 const algorithm = ref('DMA'), povHours = ref(1), povMinutes = ref(0), povParticipation = ref(10)
 const algorithmPopoverVisible = ref(false)
-const draftAlgorithm = ref('DMA'), draftPovHours = ref(1), draftPovMinutes = ref(0), draftPovParticipation = ref(10)
-const povHourOptions = Array.from({ length: 7 }, (_, hour) => hour)
-const povMinuteOptions = computed(() => Array.from({ length: Number(draftPovHours.value) === 6 ? 31 : 60 }, (_, minute) => minute))
-watch(draftPovHours, value => { if (Number(value) === 6 && Number(draftPovMinutes.value) > 30) draftPovMinutes.value = 30 })
-const algorithmDisplay = value => value === 'none' ? '无需算法' : value
+const draftPovParticipation = ref(10)
+const povExecutionTime = ref(null)
+const draftPovExecutionTime = ref(null)
+const algorithmConfigNow = ref(new Date())
+const algorithmConfigTouched = ref(false)
+const algorithmDisplay = value => value === 'none' ? 'DMA' : value
 const note = ref(''), formError = ref('')
 const isOpen = computed(() => props.modelValue)
 const orderInstrument = computed(() => ({ ...props.order, ...props.symbol, market: props.order?.market || props.symbol?.market }))
@@ -70,7 +73,7 @@ const hasInvalidPovParameters = (hours, minutes, participation) =>
   !isValidPovDuration(hours, minutes)
   || !Number.isInteger(Number(participation)) || Number(participation) < 1 || Number(participation) > 25
 const povInvalid = computed(() => algorithm.value === 'POV' && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
-const draftPovParameterError = computed(() => draftAlgorithm.value === 'POV' && hasInvalidPovParameters(draftPovHours.value, draftPovMinutes.value, draftPovParticipation.value))
+const draftPovParameterError = computed(() => povParametersError(orderInstrument.value, { executionTime: draftPovExecutionTime.value, participation: draftPovParticipation.value }, algorithmConfigNow.value, true))
 const changed = computed(() => {
   const order = props.order
   if (!order) return false
@@ -78,9 +81,10 @@ const changed = computed(() => {
     || side.value !== order.side || orderType.value !== (order.type === 'market' ? 'market' : 'limit')
     || (!isMarket.value && Number(price.value) !== Number(order.price))
     || quantityDelta.value !== 0 || (usesAmount.value ? Number(amount.value) !== Number(order.inputAmount) : order.inputAmount != null)
-    || algorithm.value !== (order.algorithm || 'DMA')
+    || algorithm.value !== (algorithmDisplay(order.algorithm) || 'DMA')
     || (algorithm.value === 'POV' && JSON.stringify([Number(povHours.value), Number(povMinutes.value), Number(povParticipation.value)])
       !== JSON.stringify([Number(order.algorithmParams?.hours ?? 1), Number(order.algorithmParams?.minutes ?? 0), Number(order.algorithmParams?.participation ?? 10)]))
+    || (algorithm.value === 'POV' && JSON.stringify(povExecutionTime.value) !== JSON.stringify(order.algorithmParams?.executionTime || null))
     || note.value.trim() !== (order.orderRemark || order.note || '').trim()
 })
 const priceError = computed(() => !isMarket.value && (!Number.isFinite(effectivePrice.value) || effectivePrice.value <= 0) ? '请输入有效的限价。' : '')
@@ -117,7 +121,8 @@ watch(() => props.order, order => {
   amount.value = order?.inputAmount ?? (Number(order?.quantity) || 0) * (Number(order?.price) || 0)
   unit.value = 'shares'
   amountUnit.value = 'yuan'
-  algorithm.value = order?.algorithm || 'DMA'
+  algorithm.value = algorithmDisplay(order?.algorithm) || 'DMA'
+  povExecutionTime.value = order?.algorithmParams?.executionTime?.slice() || null
   povHours.value = order?.algorithmParams?.hours ?? 1
   povMinutes.value = order?.algorithmParams?.minutes ?? 0
   povParticipation.value = order?.algorithmParams?.participation ?? 10
@@ -137,23 +142,29 @@ function stepPrice(direction) {
   price.value = Number(Math.max(0, current + direction * .01).toFixed(2))
 }
 function openAlgorithmConfig() {
-  draftAlgorithm.value = algorithm.value
-  draftPovHours.value = povHours.value
-  draftPovMinutes.value = povMinutes.value
+  algorithmConfigTouched.value = false
+  algorithmConfigNow.value = new Date()
+  draftPovExecutionTime.value = povExecutionTime.value?.slice()
+    || executionShortcut(orderInstrument.value, Number(povHours.value) * 60 + Number(povMinutes.value), algorithmConfigNow.value, 3, true)
   draftPovParticipation.value = povParticipation.value
 }
 function cancelAlgorithmConfig() { algorithmPopoverVisible.value = false }
 function confirmAlgorithmConfig() {
+  algorithmConfigNow.value = new Date()
   if (draftPovParameterError.value) return
-  algorithm.value = draftAlgorithm.value
-  povHours.value = draftPovHours.value
-  povMinutes.value = draftPovMinutes.value
+  povExecutionTime.value = draftPovExecutionTime.value.slice()
+  const duration = executionDurationMinutes(orderInstrument.value, povExecutionTime.value, algorithmConfigNow.value, true)
+  povHours.value = Math.floor(duration / 60)
+  povMinutes.value = duration % 60
   povParticipation.value = draftPovParticipation.value
   algorithmPopoverVisible.value = false
 }
 function submit() {
   formError.value = validationError.value || (!changed.value ? '请调整订单参数后再提交。' : '')
   if (formError.value) return
+  const scheduleError = algorithm.value === 'POV' && executionType.value !== 'highTouch'
+    ? povParametersError(orderInstrument.value, { hours: povHours.value, minutes: povMinutes.value, participation: povParticipation.value, executionTime: povExecutionTime.value }) : ''
+  if (scheduleError) { formError.value = scheduleError; return }
   const timeError = tradingTimeError()
   if (timeError) { ElMessage.error(timeError); return }
   emit('submit', {
@@ -162,7 +173,7 @@ function submit() {
     price: isMarket.value ? null : Number(price.value), quantity: nextQuantity.value,
     inputAmount: usesAmount.value ? Number(amount.value) : null,
     algorithm: algorithm.value,
-    algorithmParams: algorithm.value === 'POV' ? { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value) } : null,
+    algorithmParams: algorithm.value === 'POV' ? { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value), executionTime: povExecutionTime.value?.slice() || null } : null,
     note: note.value.trim(), originalPrice: originalPrice.value,
     originalQuantity: originalQuantity.value, quantityDelta: quantityDelta.value, operation: operation.value,
   })
@@ -198,7 +209,29 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
           <div class="field-caption"><label :for="usesAmount ? 'amend-amount' : 'amend-quantity'">订单{{ usesAmount ? '金额' : '数量' }}</label><div class="quantity-caption-actions"><span v-if="!usesAmount" class="order-lot-tag">{{ number(lotSize) }}股/手</span><el-radio-group v-model="quantityMode" class="quantity-mode" size="small" aria-label="下单方式"><el-radio-button label="quantity">数量</el-radio-button><el-radio-button v-if="!isMarket" label="amount">金额</el-radio-button></el-radio-group></div></div>
           <div class="quantity-input-row"><el-input-number v-if="usesAmount" id="amend-amount" v-model="displayedAmount" placeholder="请输入" :min="0" :step="amountUnit === 'wan' ? 1 : 1000" :precision="2" :controls="false" /><el-input-number v-else id="amend-quantity" v-model="displayedQuantity" placeholder="请输入" :min="0" :step="unit === 'wan' ? .01 : lotSize" :precision="unit === 'wan' ? 2 : 0" :controls="false" /><el-select v-if="usesAmount" v-model="amountUnit" aria-label="金额单位" popper-class="variant-popper quantity-unit-popper" :class="{ 'is-wan-unit': amountUnit === 'wan' }"><el-option label="元" value="yuan" /><el-option label="万元" value="wan" /></el-select><el-select v-else v-model="unit" aria-label="数量单位" popper-class="variant-popper quantity-unit-popper" :class="{ 'is-wan-unit': unit === 'wan' }"><el-option label="股" value="shares" /><el-option label="万股" value="wan" /></el-select></div>
           <p v-if="quantityError || operationHint" class="amend-order-hint" :class="{ 'is-error': quantityError }" role="status">{{ quantityError || operationHint }}</p>
-          <section class="order-account-block order-algorithm-block"><div class="field-caption"><span>算法</span></div><el-popover v-model:visible="algorithmPopoverVisible" trigger="click" placement="bottom-end" :width="264" popper-class="variant-popper algorithm-popper" @show="openAlgorithmConfig"><template #reference><button type="button" class="algorithm-trigger" :aria-label="`执行算法：${algorithmDisplay(algorithm)}，点击配置`"><span>{{ algorithmDisplay(algorithm) }}</span><svg class="algorithm-chevron" :class="{ 'is-open': algorithmPopoverVisible }" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg></button></template><div class="execution-algorithm-menu"><span>执行算法</span><el-radio-group v-model="draftAlgorithm" aria-label="执行算法"><el-radio-button label="POV">POV</el-radio-button><el-radio-button label="DMA">DMA</el-radio-button><el-radio-button label="none">无需算法</el-radio-button></el-radio-group><div v-if="draftAlgorithm === 'POV'" class="algorithm-popper-params" aria-label="POV 参数"><div class="algorithm-param-row"><span>运行时间</span><div class="algorithm-param-input"><el-select v-model="draftPovHours" class="algorithm-time-select" aria-label="POV运行小时" popper-class="variant-popper" :teleported="false"><el-option v-for="hour in povHourOptions" :key="hour" :label="String(hour).padStart(2, '0')" :value="hour" /></el-select><i>时</i><el-select v-model="draftPovMinutes" class="algorithm-time-select" aria-label="POV运行分钟" popper-class="variant-popper" :teleported="false"><el-option v-for="minute in povMinuteOptions" :key="minute" :label="String(minute).padStart(2, '0')" :value="minute" /></el-select><i>分</i></div></div><PovDeadline :symbol="orderInstrument" :hours="draftPovHours" :minutes="draftPovMinutes" :active="algorithmPopoverVisible" /><div class="algorithm-param-row"><span>市场成交占比</span><div class="algorithm-param-input is-participation"><el-input-number v-model="draftPovParticipation" :min="1" :max="25" :precision="0" :controls="false" aria-label="POV市场成交占比" /><i>%</i><small>不超过 25%</small></div></div><p v-if="draftPovParameterError" class="algorithm-param-error" role="alert">运行时间须大于 0 且不超过 6 小时 30 分钟，市场成交占比不得超过 25%</p></div><footer class="algorithm-menu-actions"><el-button size="small" @click="cancelAlgorithmConfig">取消</el-button><el-button size="small" type="primary" :disabled="draftPovParameterError" @click="confirmAlgorithmConfig">确认</el-button></footer></div></el-popover></section>
+          <section class="order-account-block order-algorithm-block">
+            <div class="field-caption"><span>算法</span></div>
+            <ExecutionAlgorithmTabs v-model="algorithm" v-model:visible="algorithmPopoverVisible" @show="openAlgorithmConfig">
+              <div class="execution-algorithm-menu">
+                <span>POV 参数</span>
+                <div class="algorithm-popper-params" aria-label="POV 参数">
+                  <ExecutionTimeRange v-model="draftPovExecutionTime" :item="orderInstrument" market-hours hide-two-hour @update:model-value="algorithmConfigTouched = true" />
+                  <div class="algorithm-param-row">
+                    <span>市场成交占比</span>
+                    <div class="algorithm-param-input is-participation">
+                      <el-input-number v-model="draftPovParticipation" :min="1" :max="25" :precision="0" :controls="false" aria-label="POV市场成交占比" @change="algorithmConfigTouched = true" />
+                      <i>%</i><small>不超过 25%</small>
+                    </div>
+                  </div>
+                  <p v-if="algorithmConfigTouched && draftPovParameterError" class="algorithm-param-error" role="alert">{{ draftPovParameterError }}</p>
+                </div>
+                <footer class="algorithm-menu-actions">
+                  <el-button size="small" @click="cancelAlgorithmConfig">取消</el-button>
+                  <el-button size="small" type="primary" :disabled="!!draftPovParameterError" @click="confirmAlgorithmConfig">确认</el-button>
+                </footer>
+              </div>
+            </ExecutionAlgorithmTabs>
+          </section>
           <el-slider v-model="sliderFraction" :step="1" :marks="{ 0: '0%', 25: '25%', 50: '50%', 75: '75%', 100: '100%' }" aria-label="调整订单数量百分比" />
           <div class="amend-order-capacity"><span class="total-heading"><span>{{ capacityLabel }}</span><el-tooltip v-if="side === 'sell'" content="最大可卖为原订单总数量，修改后的订单总数量不得低于已成数量。" :trigger="['hover', 'focus']" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="最大可卖说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></span><b>{{ number(maximumQuantity) }} 股</b></div>
         </section>
@@ -228,8 +261,8 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
 .variants-app .amend-order-dialog .cp-market .drag-heading { cursor: default; touch-action: auto; user-select: auto; }
 .variants-app .amend-order-dialog .amend-order-capacity { margin-top: 12px; }
 .variants-app .amend-order-dialog .amend-order-capacity b,
-.variants-app .amend-order-dialog .amend-order-summary b { font-family: 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif; font-variant-numeric: tabular-nums; }
-.variants-app .amend-order-dialog .amend-order-summary b { font-weight: 400; }
+.variants-app .amend-order-dialog .amend-order-summary b { font-family: var(--ft-font-numeric); font-variant-numeric: tabular-nums; }
+.variants-app .amend-order-dialog .amend-order-summary b { font-weight: 500; }
 .variants-app .amend-order-dialog .cp-order { display: flex; flex-direction: column; overflow: hidden; }
 /* Keep 12px side/bottom padding and add 8px above the amend form. */
 .variants-app .amend-order-dialog .cp-order > .order-form.amend-order-form { flex: 1; min-height: 0; max-height: none; padding: 20px 12px 12px!important; overflow-y: auto; }

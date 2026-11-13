@@ -1,4 +1,15 @@
-import { orderTradingSession } from './marketSession.js'
+import { executionTimeError, executionDurationMinutes } from './executionSchedule.js'
+import { marketClock, orderMarket, orderTradingSession } from './marketSession.js'
+
+const povOrderCutoffs = { A: '14:57:00', HK: '16:00:00' }
+
+export function povOrderTimeError(order, now = new Date()) {
+  if (order.algorithm !== 'POV' || order.executionType === 'highTouch') return ''
+  const market = orderMarket(order)
+  const cutoff = povOrderCutoffs[market]
+  const clock = marketClock(now, market)
+  return cutoff && clock?.time >= cutoff ? '当前时段不支持POV下单。' : ''
+}
 
 export const MAX_POV_HOURS = 6.5
 export function isValidPovDuration(hours, minutes) {
@@ -33,4 +44,18 @@ export function povDeadlineText(deadline) {
   if (!deadline) return '--'
   if (deadline.state === 'closed-day') return '当日休市'
   return deadline.end + (deadline.state === 'closed' ? '（已收盘）' : '')
+}
+
+// 旧订单继续接受运行时长，新配置同时保存起止时间及有效交易时长。
+export function povParametersError(symbol, params, now = new Date(), requireTime = false) {
+  const participation = Number(params.participation)
+  if (!Number.isInteger(participation) || participation < 1 || participation > 25) return '市场成交占比须为 1%–25%'
+  if (params.executionTime || requireTime) {
+    const error = executionTimeError(symbol, params.executionTime, now, true)
+    if (error) return error
+    const duration = executionDurationMinutes(symbol, params.executionTime, now, true)
+    if (!(duration > 0 && duration <= MAX_POV_HOURS * 60)) return '有效运行时间须大于 0 且不超过 6 小时 30 分钟'
+    return ''
+  }
+  return isValidPovDuration(params.hours, params.minutes) ? '' : '运行时间须大于 0 且不超过 6 小时 30 分钟'
 }

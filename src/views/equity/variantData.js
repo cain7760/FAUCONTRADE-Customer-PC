@@ -1,6 +1,6 @@
 import { formatPnl } from '../../utils/pnlFormat.js'
 import { hongKongDemoInstruments } from './hongKongInstruments.js'
-import { positions } from './fixtures'
+import { positions } from './fixtures.js'
 const truncate = (value, digits) => {
   const factor = 10 ** digits
   const result = Math.trunc(Number(value) * factor) / factor
@@ -76,6 +76,21 @@ export const variantRows = positions.map((p, i) => {
     id: `T0-${i}`,
   }
 })
+
+// 独立的零可用持仓样本，不改变既有订单使用的 variantRows 标的顺序。
+const reservedPosition = { ...hongKongDemoInstruments.find(row => row.code === '00700'), opening: 1000, pendingSell: 1000 }
+const reservedMetrics = calculatePositionMetrics(reservedPosition)
+export const zeroAvailablePosition = {
+  ...reservedPosition,
+  ...reservedMetrics,
+  id: 'T0-zero-available', account: 'TZS_T0', direction: '多',
+  executionType: 'lowTouch', orderType: '系统单', algorithm: 'DMA',
+  orderRemark: '', traderRemark: '', positionDate: '2026-09-18',
+  value: reservedPosition.price * reservedMetrics.qty,
+  valueWan: reservedPosition.price * reservedMetrics.qty / 10000,
+  marginRate: 10, marginOccupied: reservedPosition.cost * reservedMetrics.qty * .1,
+  floatingProfit: 0, totalProfit: reservedMetrics.dailyRealizedProfit,
+}
 
 // 下单检索使用独立的全市场演示标的池，不能从当前持仓列表推导。
 const marketLabels = ['华远科技', '新城制造', '中原能源', '海岳医药', '智联电子', '云帆软件', '国泰材料', '远景通信', '华夏消费', '深港物流']

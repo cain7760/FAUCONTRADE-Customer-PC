@@ -59,5 +59,6 @@ watch(() => props.target, (target, _, onCleanup) => {
 </style>
 
 <style>
-.feature-annotation-popper.el-popover.el-popper{box-sizing:border-box;max-width:calc(100vw - 24px);padding:14px;background:#25282d;border:1px solid #d8505e!important;border-radius:4px;color:#c9ced6;box-shadow:0 8px 24px #0006}
+/* 全局深色弹层背景使用 !important，此处仅覆盖产品标注说明弹框。 */
+.feature-annotation-popper.el-popover.el-popper{box-sizing:border-box;max-width:calc(100vw - 24px);padding:14px;background:#181717!important;border:1px solid #d8505e!important;border-radius:4px;color:#c9ced6;box-shadow:0 8px 24px #0006}
 </style>

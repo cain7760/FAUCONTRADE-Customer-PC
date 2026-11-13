@@ -819,7 +819,13 @@
   --el-button-hover-border-color: #bb984a;
   --el-button-active-bg-color: #bb984a;
   --el-button-active-border-color: #bb984a;
+  --el-button-disabled-bg-color: #bb984a;
+  --el-button-disabled-border-color: #bb984a;
   --el-button-outline-color: #dfc170;
+}
+
+.algorithm-popper .algorithm-menu-actions .el-button--primary.is-disabled {
+  opacity: .5;
 }
 
 .algorithm-menu-actions .el-button:not(.el-button--primary) {
@@ -1542,7 +1548,7 @@
 .trader-center-layout .el-input-number .el-input__inner,
 .trader-center-layout .trs-split-validation strong,
 .trader-center-layout .asset-number {
-  font-family: 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif;
+  font-family: var(--ft-font-numeric);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1854,7 +1860,7 @@
 
 .trs-split-details > header strong {
   color: #cbd2dc;
-  font-family: 'D-DIN Exp', 'DIN Alternate', 'Arial Narrow', sans-serif;
+  font-family: var(--ft-font-numeric);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -2344,3 +2350,12 @@
 
 /* Read-only deal data follows the same three-field order as the editor. */
 .trs-deal-grid--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+
+/* 12px 数值字体统一提升至 13px，保留已有大号数值及文本标签。 */
+.trader-center-layout .trs-deal-grid dd,
+.trader-center-layout .el-table td.is-right .cell,
+.trader-center-layout .trs-split-validation strong,
+.trs-split-details > header strong { font-size: 13px; font-weight:500;}
+
+:where(.trader-center-layout) .trs-numeric { font-size: 13px; font-weight:500;}
+.trader-center-layout .trs-inline-split .el-input-number .el-input__inner { font-size: 13px; font-weight:500;}

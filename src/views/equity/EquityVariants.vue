@@ -5,7 +5,7 @@ import { ArrowDownBold, Bell, Briefcase, CaretBottom, ChatDotRound, Clock, Colle
 import ClientLineIcon from '../../ClientLineIcon.vue'
 import SettingsMenuIcon from '../../SettingsMenuIcon.vue'
 import { accounts } from './fixtures'
-import { marketInstruments, variantRows, variants, money, signedMoney, number, price as formatPrice } from './variantData'
+import { marketInstruments, variantRows, zeroAvailablePosition, variants, money, signedMoney, number, price as formatPrice } from './variantData'
 import { columnOptionsFor } from './tableFieldDefinitions'
 import { orderTypeError } from './orderMarketRules.js'
 import { positionMarginInCny } from './positionCurrency'
@@ -25,11 +25,13 @@ import { useOrderSessionExpiry } from '../../composables/useOrderSessionExpiry.j
 import { useTradingTime } from '../../composables/useTradingTime.js'
 import { deferLunchOperation, flushLunchOperations } from '../../domain/orders/lunchBreak.js'
 import { marketClock } from '../../domain/orders/marketSession.js'
+import { readDemoAccount, leaveDemoSession } from '../../domain/auth/demoSession.js'
 
 const initialVariant = new URLSearchParams(location.search).get('layout')
 const assetUrl = name => `${import.meta.env.BASE_URL}original-icons/${name}`
 const variant = ref(variants.some(v => v.id === initialVariant) ? initialVariant : 'classic')
 const activeNav = ref('权益交易')
+const signedInAccount = readDemoAccount()
 const viewportWidth = ref(window.innerWidth)
 const messageCenterVisible = ref(false)
 const messageCategory = ref('全部')
@@ -75,7 +77,7 @@ const latestTransactionNotice = computed(() => {
     priceLabel: trade.priceLabel || '成交均价', price: trade.price != null ? `${money(trade.price)} ${trade.currency || 'CNY'}` : '--',
   }
 })
-const transactionToastTimers = new Map()
+let transactionToastTimer = null
 const headerNotice = computed(() => systemRunning.value ? null : {
   id: 'system-interrupted', text: '交易系统当前中断，下单服务暂不可用；已提交订单请以订单状态为准。',
 })
@@ -137,6 +139,7 @@ const assetsVisible = ref(true), assetsCollapsed = ref(false)
 const tab = ref('positions'), selectedCode = ref('000001'), table = ref(null), quote = ref(null), ticketResetKey = ref(0)
 const ticketContext = ref(null)
 const closePositionVisible = ref(false), closingPosition = ref(null)
+const unavailablePositionVisible = ref(false)
 const chaseOrderVisible = ref(false), chasingPosition = ref(null), chasingOrder = ref(null), chasingAccountId = ref(null)
 const amendOrderVisible = ref(false), amendingOrder = ref(null)
 const cancelOrderVisible = ref(false), cancelingOrder = ref(null)
@@ -268,7 +271,7 @@ function secondAccountPosition(position) {
     floatingProfit: position.floatingProfit * 2, dailyRealizedProfit: position.dailyRealizedProfit * 2, totalProfit: position.totalProfit * 2,
   }
 }
-const instruments = computed(() => variantRows.map(p => accountId.value === 'TZS_T0' ? p : secondAccountPosition(p)))
+const instruments = computed(() => accountId.value === 'TZS_T0' ? [...variantRows, zeroAvailablePosition] : variantRows.map(secondAccountPosition))
 const emptySelected = { code: '', market: '', name: '请选择下单标的', price: null, cost: null, change: 0, available: 0 }
 const selected = computed(() => instruments.value.find(p => p.code === selectedCode.value) || marketInstruments.find(p => p.code === selectedCode.value) || emptySelected)
 const trsTicketSymbol = computed(() => trsOrderRequest.value?.symbol || selected.value)
@@ -278,7 +281,7 @@ const trsTicketInstruments = computed(() => {
 })
 const mockCnyExchangeRates = Object.freeze({ CNY: 1, HKD: 0.92, USD: 7.18 })
 const allPositionRows = computed(() => {
-  const baseRows = [...variantRows, ...variantRows.map(secondAccountPosition)]
+  const baseRows = [...variantRows, zeroAvailablePosition, ...variantRows.map(secondAccountPosition)]
   const syncedKeys = new Set(syncedHtPositions.value.map(row => `${row.account}:${row.code}`))
   return [...syncedHtPositions.value, ...baseRows.filter(row => !syncedKeys.has(`${row.account}:${row.code}`))]
     .map(row => ({ ...row, marginOccupied: positionMarginInCny(row, mockCnyExchangeRates), marginCurrency: 'CNY' }))
@@ -445,21 +448,16 @@ function showEmergency(message) {
   if (message?.urgent) emergencyMessage.value = message
 }
 function showTransactionToast(message) {
-  if (!message?.trade || transactionToastTimers.has(message.id)) return
-  transactionToasts.value = [...transactionToasts.value, { message, remaining: 8 }]
-  const countdownTimer = window.setInterval(() => {
-    transactionToasts.value = transactionToasts.value.map(toast => toast.message.id === message.id
-      ? { ...toast, remaining: Math.max(0, toast.remaining - 1) }
-      : toast)
-  }, 1000)
-  const dismissTimer = window.setTimeout(() => dismissTransactionToast(message.id), 8000)
-  transactionToastTimers.set(message.id, { countdownTimer, dismissTimer })
+  if (!message?.trade) return
+  window.clearTimeout(transactionToastTimer)
+  transactionToasts.value = [{ message }]
+  transactionToastTimer = window.setTimeout(() => dismissTransactionToast(message.id), 5000)
 }
 function dismissTransactionToast(id) {
-  const timers = transactionToastTimers.get(id)
-  if (timers) { window.clearInterval(timers.countdownTimer); window.clearTimeout(timers.dismissTimer) }
-  transactionToastTimers.delete(id)
-  transactionToasts.value = transactionToasts.value.filter(toast => toast.message.id !== id)
+  if (transactionToasts.value[0]?.message.id !== id) return
+  window.clearTimeout(transactionToastTimer)
+  transactionToastTimer = null
+  transactionToasts.value = []
 }
 function timestampNow() {
   const clock = marketClock()
@@ -784,7 +782,18 @@ function loadPositionIntoTicket(row) {
   collapsed.value = false
   ticketResetKey.value += 1
 }
-function openClosePosition(row) { if (!systemRunning.value) return; closingPosition.value = row; closePositionVisible.value = true }
+function openClosePosition(row) {
+  if (!systemRunning.value) return
+  if (!(Number(row?.available) > 0)) {
+    closingPosition.value = null
+    closePositionVisible.value = false
+    unavailablePositionVisible.value = true
+    return
+  }
+  unavailablePositionVisible.value = false
+  closingPosition.value = row
+  closePositionVisible.value = true
+}
 function openChaseOrder(row) {
   if (!systemRunning.value) return
   const position = allPositionRows.value.find(item => item.code === row.code && item.account === row.account) || variantRows.find(item => item.code === row.code)
@@ -1014,10 +1023,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateViewportWidth)
   clearPasswordVerificationTimer()
-  transactionToastTimers.forEach(({ countdownTimer, dismissTimer }) => { window.clearInterval(countdownTimer); window.clearTimeout(dismissTimer) })
-  transactionToastTimers.clear()
+  window.clearTimeout(transactionToastTimer)
 })
 const recordTableContext = {
+  cnyExchangeRate,
   tradingTimeMode, setTradingTimeMode,
   money, formatPrice, readHistorySource,
   acceptAmendOrder, acceptChaseOrder, acceptClosePosition, acceptOrder, acceptTrsOrder, account, accountLabel, activeTraderGroup, activeTraderPrimary,
@@ -1042,15 +1051,16 @@ provide(tradingContextKey, recordTableContext)
 </script>
 
 <template>
-  <TradingAppShell :variant="variant" :visible-nav="visibleNav" :overflow-nav="overflowNav" :active-nav="activeNav" :show-header-notice="showHeaderNotice" :system-notice-enabled="systemNoticeEnabled" :system-running="systemRunning" :header-notice="headerNotice" :show-unread-badge="showUnreadBadge" :unread-message-count="unreadMessageCount" :help-center-url="helpCenterUrl" @select-nav="selectProductNav" @open-message-center="openMessageCenter" @dismiss-notice="dismissHeaderNotice" @open-settings="settingsVisible=true" @open-help-center="openHelpCenter" @trigger-demo-toast="triggerDemoTransactionToast">
+  <TradingAppShell :account-name="signedInAccount" @logout="leaveDemoSession()" :variant="variant" :visible-nav="visibleNav" :overflow-nav="overflowNav" :active-nav="activeNav" :show-header-notice="showHeaderNotice" :system-notice-enabled="systemNoticeEnabled" :system-running="systemRunning" :header-notice="headerNotice" :show-unread-badge="showUnreadBadge" :unread-message-count="unreadMessageCount" :help-center-url="helpCenterUrl" @select-nav="selectProductNav" @open-message-center="openMessageCenter" @dismiss-notice="dismissHeaderNotice" @open-settings="settingsVisible=true" @open-help-center="openHelpCenter" @trigger-demo-toast="triggerDemoTransactionToast">
     <template #notifications>
-      <HeaderTransactionNotice :notice="latestTransactionNotice" :count="transactionToasts.length" @open-messages="messageCategory = '消息'; openMessageCenter()" />
+      <HeaderTransactionNotice :notice="latestTransactionNotice" @open-messages="messageCategory = '消息'; openMessageCenter()" />
     </template>
     <KeepAlive><OptionsTradingPage :context="recordTableContext" key="options" v-if="activeNav === '期权交易'" :paused="!systemRunning" :download-csv="downloadCsv" />
     <FinancingPage key="financing" v-else-if="activeNav === '融资申请'" />
     <StrategyTradingPage key="strategy" v-else-if="activeNav === '策略交易'" />
     <EquityTradingPage key="equity" v-else-if="activeNav !== '数据'" />
     <DataPage key="data" v-else-if="activeNav === '数据'" :accounts="accounts" :context="recordTableContext" /></KeepAlive>
+    <BaseDialog v-model="unavailablePositionVisible" title="操作失败" width="420px" align-center class="emergency-message-dialog"><p>当前标的无可用持仓。</p><template #footer><el-button type="primary" @click="unavailablePositionVisible=false">知道了</el-button></template></BaseDialog>
     <BaseDialog v-model="messageCenterVisible" width="760px" align-center class="message-center-dialog" :show-close="false">
       <template #header><header class="message-center-header"><h2>消息中心</h2><div class="message-header-actions"><button type="button" class="message-close-action" aria-label="关闭消息中心" @click="messageCenterVisible=false"><el-icon><Close /></el-icon></button></div></header></template>
       <div class="message-center-layout"><nav class="message-category-tabs" aria-label="消息分类"><button v-for="category in messageCategories" :key="category" :class="{ active: messageCategory === category }" @click="messageCategory=category"><img class="message-category-icon" :src="messageIcon(category)" alt=""><span>{{ category }}</span><i v-if="categoryUnreadCount(category)">{{ categoryUnreadCount(category) }}</i></button></nav>

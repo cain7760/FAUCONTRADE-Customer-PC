@@ -74,7 +74,7 @@ export function historyCell(row, key) {
   if (key === 'marginRate') return row.marginRate == null ? '--' : `${historyNumber(row.marginRate, 2, false)}%`
   if (key === 'market') return ({ SZ: '深市', SH: '沪市', HK: '港股', US: '美股' }[row.market] || row.market)
   if (key === 'code') return `${row.code}.${row.market}`
-  if (key === 'algorithm') return row.algorithm === 'none' ? '无需算法' : row.algorithm || '--'
+  if (key === 'algorithm') return row.algorithm === 'none' ? 'DMA' : row.algorithm || '--'
   return row[key] ?? '--'
 }
 const column = (key, label, width = 100, numeric = false) => ({ key, label, width, numeric })

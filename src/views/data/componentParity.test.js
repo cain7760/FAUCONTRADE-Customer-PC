@@ -3,6 +3,32 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 
+test('权益下单、平仓改单与期权下单共用执行时间控件，算法只提供POV和DMA', () => {
+  for (const path of ['../equity/components/OrderTicket.vue', '../equity/components/AmendOrderDialog.vue', '../options/OptionOrderTicket.vue']) {
+    const source = read(path)
+    assert.ok(source.includes('components/trading/ExecutionTimeRange.vue'))
+    assert.ok(source.includes('<ExecutionTimeRange'))
+    assert.doesNotMatch(source, /无需算法|<PovDeadline|draftPovHours|draftPovMinutes/)
+  }
+  const control = read('../../components/trading/ExecutionTimeRange.vue')
+  for (const label of ['10m', '20m', '1h', '2h', '到中午收盘', '到下午收盘']) assert.ok(control.includes(label))
+  assert.ok(control.includes('option-time-popper'))
+  for (const path of ['../equity/components/OrderTicket.vue', '../equity/components/AmendOrderDialog.vue']) {
+    assert.match(read(path), /<ExecutionTimeRange[^>]*hide-two-hour/)
+  }
+  assert.doesNotMatch(read('../options/OptionOrderTicket.vue'), /hide-two-hour/)
+  assert.match(control, /!props\.hideTwoHour \|\| value !== 120/)
+})
+
+test('期权描述的结构、期限及数值统一使用 13px、500 字重的数值样式', () => {
+  const source = read('../options/OptionOrderTicket.vue')
+  for (const label of ['期权结构', '期限', '规模(万)', '执行价(%)', '参与率(%)']) {
+    assert.ok(source.includes(`<dt>${label}</dt><dd class="option-numeric">`))
+  }
+  assert.match(source, /\.option-numeric\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;/)
+  assert.match(source, /\.option-numeric,[^{]+\{[^}]*font-family:\s*var\(--ft-font-numeric\)/)
+})
+
 test('权益与期权共用底部系统状态及交易时间开关，展示模式仅在期权提供', () => {
   for (const path of ['../equity/pages/EquityTradingPage.vue', '../options/OptionsTradingPage.vue']) {
     const source = read(path)

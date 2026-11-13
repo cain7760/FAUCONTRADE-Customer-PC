@@ -11,7 +11,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      input: { main: 'index.html', equityVariants: 'equity-variants.html' },
+      input: { main: 'index.html', equityVariants: 'equity-variants.html', login: 'login.html' },
     },
   },
 })
