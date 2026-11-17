@@ -30,10 +30,16 @@ const povMinutes = ref(props.initialOrder?.algorithmParams?.minutes ?? 0)
 const povParticipation = ref(props.initialOrder?.algorithmParams?.participation ?? 25)
 const draftAlgorithm = ref(algorithm.value)
 const draftPovParticipation = ref(povParticipation.value)
-const povExecutionTime = ref(props.initialOrder?.algorithmParams?.executionTime?.slice() || null)
+const povExecutionTime = ref(props.initialOrder?.algorithmParams ? props.initialOrder.algorithmParams.executionTime?.slice() || null : ['', ''])
 const draftPovExecutionTime = ref(null)
 const algorithmConfigNow = ref(new Date())
 const algorithmConfigTouched = ref(false)
+const algorithmSummary = computed(() => {
+  if (!['POV', 'TWAP', 'VWAP'].includes(algorithm.value)) return ''
+  const range = povExecutionTime.value
+  const time = range ? `${range[0]?.slice(0, 5) || '即时'}–${range[1]?.slice(0, 5) || '收盘'}` : `${povHours.value}h ${povMinutes.value}m`
+  return `${time} ${povParticipation.value}%`
+})
 const symbolMarket = ref('ALL'), search = ref(''), unit = ref(props.initialOrder?.unit || 'shares'), amountUnit = ref(props.initialOrder?.amountUnit || 'yuan'), confirming = ref(false), quantityLimitError = ref(''), snapshot = ref(null)
 const accountSearch = ref('')
 const accountMenuVisible = ref(false)
@@ -154,7 +160,7 @@ function chooseSymbol(code) {
   displaySymbolCode.value = code
   rememberRecent(code)
   resetOrder()
-  povExecutionTime.value = null
+  povExecutionTime.value = ['', '']
   algorithm.value = defaultAlgorithmForMarket(instrument.market)
   if (instrument.isManual) { selectedManualInstrument.value = instrument; quantityMode.value = 'quantity'; unit.value = 'shares'; price.value = undefined; return }
   selectedManualInstrument.value = null
@@ -177,7 +183,7 @@ function saveManualInstrument() {
   manualInstruments.value = [instrument, ...manualInstruments.value.filter(item => item.code !== code)]
   selectedManualInstrument.value = instrument
   displaySymbolCode.value = code
-  povExecutionTime.value = null
+  povExecutionTime.value = ['', '']
   algorithm.value = defaultAlgorithmForMarket(instrument.market)
   search.value = ''
   price.value = undefined
@@ -234,7 +240,7 @@ function confirmAlgorithmConfig() {
   algorithmPopoverVisible.value = false
 }
 let applyingInitialOrder = false
-watch(() => props.symbol.code, code => { if (selectedManualInstrument.value || props.customerOrderReadonly) return; displaySymbolCode.value = code; price.value = props.symbol.price; povExecutionTime.value = null; algorithm.value = defaultAlgorithmForMarket(props.symbol.market); resetOrder() })
+watch(() => props.symbol.code, code => { if (selectedManualInstrument.value || props.customerOrderReadonly) return; displaySymbolCode.value = code; price.value = props.symbol.price; povExecutionTime.value = ['', '']; algorithm.value = defaultAlgorithmForMarket(props.symbol.market); resetOrder() })
 watch(() => props.initialOrder, value => {
   if (!value) return
   applyingInitialOrder = true
@@ -327,7 +333,7 @@ function submit() {
     return
   }
   const order = { ...snapshot.value }
-  if (['POV', 'TWAP', 'VWAP'].includes(order.algorithm) && order.executionType !== 'highTouch') {
+  if (['POV', 'TWAP', 'VWAP'].includes(order.algorithm) && order.executionType !== 'highTouch' && order.algorithmParams?.executionTime) {
     order.algorithmParams = { ...order.algorithmParams, executionTime: resolvePovExecutionTime(order, order.algorithmParams?.executionTime) }
     const [start, end] = order.algorithmParams.executionTime
     if (!start || !end || start >= end) { ElMessage.error('结束时间须晚于开始时间'); return }
@@ -381,7 +387,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
       <el-slider v-if="executionType === 'lowTouch'" v-model="fraction" :disabled="customerOrderReadonly" :step="1" :marks="{0:'0%',25:'25%',50:'50%',75:'75%',100:'100%'}" @input="size" />
       <section class="order-account-block order-algorithm-block">
         <div class="field-caption"><span>算法</span></div>
-        <ExecutionAlgorithmTabs :model-value="algorithm" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" :disabled="customerOrderReadonly" @show="openAlgorithmConfig">
+        <ExecutionAlgorithmTabs :model-value="algorithm" :summary="algorithmSummary" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" :disabled="customerOrderReadonly" @show="openAlgorithmConfig">
           <div class="execution-algorithm-menu">
             <div v-if="draftAlgorithm !== 'DMA'" class="algorithm-popper-params" :aria-label="`${draftAlgorithm} 参数`">
               <ExecutionTimeRange v-model="draftPovExecutionTime" :item="ticketSymbol" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />

@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 
-defineProps({ modelValue: String, draftValue: String, visible: Boolean, disabled: Boolean })
+defineProps({ modelValue: String, draftValue: String, summary: String, visible: Boolean, disabled: Boolean })
 const emit = defineEmits(['update:draftValue', 'update:visible', 'show'])
 const tabs = ref()
 const popoverWidth = 282
@@ -33,6 +33,7 @@ const algorithms = ['POV', 'DMA', 'TWAP', 'VWAP']
 
 <template>
   <div ref="tabs" class="execution-algorithm-tabs">
+    <span v-if="summary" class="symbol-tags algorithm-parameter-tags" :title="summary"><span>{{ summary }}</span></span>
     <el-popover :visible="visible" @update:visible="emit('update:visible', $event)" trigger="click" :disabled="disabled" placement="bottom-end" :width="popoverWidth" :popper-options="popperOptions" :popper-class="['variant-popper algorithm-popper pov-parameters-popper', { 'is-dma': draftValue === 'DMA' }]" @before-enter="emit('show')">
       <template #reference>
         <button type="button" class="algorithm-trigger" :disabled="disabled" :aria-expanded="visible" :aria-label="`执行算法：${modelValue}，点击配置`"><span>{{ modelValue }}</span><svg class="execution-algorithm-chevron" :class="{ 'is-open': visible }" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg></button>
@@ -49,6 +50,8 @@ const algorithms = ['POV', 'DMA', 'TWAP', 'VWAP']
 </template>
 
 <style scoped>
+.algorithm-parameter-tags { min-width: 0; margin: 0 8px 0 0; }
+.algorithm-parameter-tags > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--ft-font-numeric); }
 .algorithm-trigger { display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;height:20px;padding:0 4px;border:0;background:transparent;color:var(--el-text-color-primary);font:inherit;font-size:12px;cursor:pointer; }
 .algorithm-selection-menu { display:grid;gap:16px;color:var(--el-text-color-primary); }
 .algorithm-selection-heading { color:var(--el-text-color-secondary);font-size:12px; }

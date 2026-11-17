@@ -27,6 +27,12 @@ const povExecutionTime = ref(null)
 const draftPovExecutionTime = ref(null)
 const algorithmConfigNow = ref(new Date())
 const algorithmConfigTouched = ref(false)
+const algorithmSummary = computed(() => {
+  if (!['POV', 'TWAP', 'VWAP'].includes(algorithm.value)) return ''
+  const range = povExecutionTime.value
+  const time = range ? `${range[0]?.slice(0, 5) || '即时'}–${range[1]?.slice(0, 5) || '收盘'}` : `${povHours.value}h ${povMinutes.value}m`
+  return `${time} ${povParticipation.value}%`
+})
 const algorithmDisplay = value => value === 'none' ? 'DMA' : value
 const note = ref(''), formError = ref('')
 const isOpen = computed(() => props.modelValue)
@@ -221,7 +227,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
           <p v-if="quantityError || operationHint" class="amend-order-hint" :class="{ 'is-error': quantityError }" role="status">{{ quantityError || operationHint }}</p>
           <section class="order-account-block order-algorithm-block">
             <div class="field-caption"><span>算法</span></div>
-            <ExecutionAlgorithmTabs :model-value="algorithm" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" @show="openAlgorithmConfig">
+            <ExecutionAlgorithmTabs :model-value="algorithm" :summary="algorithmSummary" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" @show="openAlgorithmConfig">
               <div class="execution-algorithm-menu">
                 <div v-if="draftAlgorithm !== 'DMA'" class="algorithm-popper-params" :aria-label="`${draftAlgorithm} 参数`">
                   <ExecutionTimeRange v-model="draftPovExecutionTime" :item="orderInstrument" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
