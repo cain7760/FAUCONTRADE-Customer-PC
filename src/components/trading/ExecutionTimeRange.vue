@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { executionTimeBounds, executionTimeError, executionShortcut } from '../../domain/orders/executionSchedule.js'
 
 const props = defineProps({
@@ -14,7 +14,12 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 const timeRange = ref()
+const pickerContainer = ref()
 const pickerWidth = ref(282)
+const endpointPickerWidth = 200
+onMounted(() => {
+  pickerContainer.value = timeRange.value?.closest('.pov-parameters-popper') || undefined
+})
 const povPickerOptions = {
   modifiers: [
     { name: 'flip', enabled: false },
@@ -22,6 +27,7 @@ const povPickerOptions = {
       name: 'offset',
       options: {
         offset: ({ reference }) => {
+          if (props.optional) return [0, 8]
           const panel = timeRange.value?.closest('.pov-parameters-popper')?.getBoundingClientRect()
           return [panel ? panel.x - reference.x : 0, 8]
         },
@@ -57,7 +63,7 @@ function prepareTimePicker() {
   now.value = new Date()
   const panel = timeRange.value?.closest('.pov-parameters-popper')
   if (panel) pickerWidth.value = panel.getBoundingClientRect().width
-  if (!range.value) range.value = executionShortcut(props.item, 10, now.value, 5, props.marketHours, props.unrestricted)
+  if (!props.optional && !range.value) range.value = executionShortcut(props.item, 10, now.value, 5, props.marketHours, props.unrestricted)
 }
 function timeDisabled(hour, minute, role) {
   const value = hour * 60 + minute
@@ -81,7 +87,7 @@ function selectShortcut(value) {
   <section ref="timeRange" class="execution-time-range">
     <div class="field-caption"><label :class="{ required: !optional }">选择时间</label><span class="execution-time-hint">建议执行时长：大于10m</span></div>
     <div v-if="optional" class="optional-time-range">
-      <el-time-picker v-for="(placeholder, index) in ['开始时间', '结束时间']" :key="index" :model-value="range?.[index]?.slice(0, 5) || null" format="HH:mm" value-format="HH:mm" :placeholder="placeholder" :aria-label="placeholder" :disabled="disabled" popper-class="variant-popper option-time-popper" placement="bottom-start" @update:model-value="updateEndpoint(index, $event)" />
+      <el-time-picker v-for="(placeholder, index) in ['开始时间', '结束时间']" :key="index" :model-value="range?.[index]?.slice(0, 5) || null" format="HH:mm" value-format="HH:mm" :placeholder="placeholder" :aria-label="placeholder" :disabled="disabled" :append-to="pickerContainer" :popper-class="['variant-popper option-time-popper', { 'pov-time-popper': marketHours }]" :placement="index === 0 ? 'bottom-start' : 'bottom-end'" :popper-options="marketHours ? povPickerOptions : undefined" :popper-style="marketHours ? { width: `${endpointPickerWidth}px` } : undefined" @focus="prepareTimePicker" @update:model-value="updateEndpoint(index, $event)" />
       <span class="time-range-separator">-</span>
     </div>
     <el-time-picker v-else v-model="range" :disabled-hours="disabledHours" :disabled-minutes="disabledMinutes" @focus="prepareTimePicker" is-range format="HH:mm" value-format="HH:mm" range-separator="-" start-placeholder="开始时间" end-placeholder="结束时间" aria-label="执行时间范围" :popper-class="['variant-popper option-time-popper', { 'pov-time-popper': marketHours }]" :placement="marketHours ? 'bottom-start' : 'bottom'" :popper-options="marketHours ? povPickerOptions : undefined" :popper-style="marketHours ? { width: `${pickerWidth}px` } : undefined" :disabled="disabled" @change="touched = true" />
@@ -113,7 +119,8 @@ function selectShortcut(value) {
 </style>
 
 <style>
-.pov-time-popper .el-time-range-picker {
+.pov-time-popper .el-time-range-picker,
+.pov-time-popper .el-time-panel {
   width: 100%;
 }
 .pov-time-popper .el-time-range-picker__content {

@@ -1,4 +1,4 @@
-import { isValidPovDuration, povOrderTimeError, povParametersError } from '../../domain/orders/povSchedule.js'
+import { isValidPovDuration, povOrderTimeError, povParametersError, resolvePovExecutionTime } from '../../domain/orders/povSchedule.js'
 import { executionShortcut, executionDurationMinutes } from '../../domain/orders/executionSchedule.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -12,7 +12,7 @@ import { defaultAlgorithmForMarket } from './orderAlgorithmDefaults.js'
 function setup(file, props, events = [], environment = {}) {
   const { descriptor } = parse(readFileSync(new URL(file, import.meta.url), 'utf8'))
   const script = compileScript(descriptor, { id: 'market-rules-test' }).content
-  const imports = { tradingTimeErrorKey: 'faucon-demo-trading-time-error', isValidPovDuration,
+  const imports = { tradingTimeErrorKey: 'faucon-demo-trading-time-error', isValidPovDuration, resolvePovExecutionTime,
     povOrderTimeError: order => povOrderTimeError(order, new Date('2026-11-12T10:00:00+08:00')),
     povParametersError: (symbol, params, _now, required) => povParametersError(symbol, params, new Date('2026-11-12T10:00:00+08:00'), required),
     executionShortcut, executionDurationMinutes, ExecutionTimeRange: {}, ExecutionAlgorithmTabs: {}, ...vue, ...marketRules, defaultAlgorithmForMarket, ArrowDown: {}, ArrowUp: {}, CircleClose: {}, InfoFilled: {},
@@ -141,8 +141,8 @@ test('下单和平仓共用票据、改单均保存起止时间并兼容旧运�
   ticket.algorithm.value = 'POV'
   ticket.draftPovExecutionTime.value = ['11:00', '14:00']
   ticket.confirmAlgorithmConfig()
-  assert.equal(ticket.povHours.value, 1)
-  assert.equal(ticket.povMinutes.value, 30)
+  assert.equal(ticket.povHours.value, 3)
+  assert.equal(ticket.povMinutes.value, 0)
   assert.deepEqual(ticket.povExecutionTime.value, ['11:00', '14:00'])
   assert.equal(ticket.draftPovParameterError.value, '')
   ticket.draftPovExecutionTime.value = ['14:00', '13:00']
@@ -168,7 +168,7 @@ test('下单和平仓共用票据、改单均保存起止时间并兼容旧运�
   scope.stop()
 })
 
-test('POV确认后跨过开始时间，最终提交重新校验快照', () => {
+test('POV全天选时允许保存早于当前时间的参数快照', () => {
   const scope = vue.effectScope(), events = []
   const props = propsFor()
   props.initialOrder = { algorithm: 'POV', type: 'limit', price: 12, quantity: 100,
@@ -181,8 +181,7 @@ test('POV确认后跨过开始时间，最终提交重新校验快照', () => {
   assert.equal(form.confirming.value, true)
   now = new Date('2026-11-12T10:04:00+08:00')
   form.submit()
-  assert.equal(events.some(([event]) => event === 'order'), false)
-  assert.equal(events.at(-1)[1], '开始时间不可早于当前时间')
+  assert.equal(events.some(([event]) => event === 'order'), true)
   assert.deepEqual(form.snapshot.value.algorithmParams.executionTime, ['10:03', '11:03'])
   scope.stop()
 })

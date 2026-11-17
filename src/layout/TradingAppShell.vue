@@ -27,7 +27,10 @@ function handleAccountCommand(command) {
 <template>
   <main class="variants-app" :class="`version-${variant}`">
     <header class="variant-header">
-      <img :src="assetUrl('logo-faucon-trade.png')" alt="FAUCON TRADE"><i class="header-brand-divider" aria-hidden="true"></i>
+      <span class="header-brand" role="img" aria-label="FAUCON TRADE">
+        <img class="header-brand-icon" :src="assetUrl('logo-faucon-trade.png')" alt="" aria-hidden="true">
+        <img class="header-brand-text" :src="assetUrl('logo-faucon-trade.png')" alt="" aria-hidden="true">
+      </span><i class="header-brand-divider" aria-hidden="true"></i>
       <nav aria-label="产品菜单">
         <button v-for="item in visibleNav" :key="item.label" :class="{ active: activeNav === item.label }" @click="emit('select-nav', item.label)"><span class="nav-menu-content"><span class="source-composite variant-nav-icon" aria-hidden="true"><img v-for="part in item.icon" :key="part[0]" :src="assetUrl(part[0])" :style="{ left: `${part[1]}px`, top: `${part[2]}px`, width: `${part[3]}px`, height: `${part[4]}px` }" alt=""></span><span class="nav-menu-label">{{ item.label }}</span></span></button>
         <el-dropdown v-if="overflowNav.length" trigger="click" popper-class="variant-nav-popper" @command="label => emit('select-nav', label)"><button class="more-nav" :class="{ active: overflowNav.some(item => item.label === activeNav) }">更多<el-icon><CaretBottom /></el-icon></button><template #dropdown><el-dropdown-menu><el-dropdown-item v-for="item in overflowNav" :key="item.label" :command="item.label"><span class="source-composite variant-nav-icon" aria-hidden="true"><img v-for="part in item.icon" :key="part[0]" :src="assetUrl(part[0])" :style="{ left: `${part[1]}px`, top: `${part[2]}px`, width: `${part[3]}px`, height: `${part[4]}px` }" alt=""></span>{{ item.label }}</el-dropdown-item></el-dropdown-menu></template></el-dropdown>
@@ -56,6 +59,29 @@ function handleAccountCommand(command) {
 </template>
 
 <style scoped>
+.header-brand {
+  position: relative;
+  display: block;
+  flex: 0 0 100px;
+  width: 100px;
+  height: 26px;
+}
+.header-brand img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* Crop boundaries follow the eagle and lettering in the original bitmap. */
+.header-brand-icon { clip-path: inset(0 75% 0 0); }
+.header-brand-text {
+  clip-path: inset(0 0 0 30%);
+  transform: scale(.9);
+  transform-origin: 32.8% 50%;
+}
+
 .header-notification-area {
   container: header-notifications / inline-size;
   flex: 1 1 352px;

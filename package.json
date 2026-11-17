@@ -1,7 +1,7 @@
 {
   "name": "faucon-trader-vue-client",
   "private": true,
-  "version": "1.26.1113",
+  "version": "1.26.1116",
   "type": "module",
   "scripts": {
     "dev": "vite",

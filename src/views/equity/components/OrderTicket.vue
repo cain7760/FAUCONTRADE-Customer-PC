@@ -30,6 +30,11 @@ const povMinutes = ref(props.initialOrder?.algorithmParams?.minutes ?? 0)
 const povParticipation = ref(props.initialOrder?.algorithmParams?.participation ?? 10)
 const draftPovParticipation = ref(povParticipation.value)
 const povExecutionTime = ref(props.initialOrder?.algorithmParams?.executionTime?.slice() || null)
+const povSummary = computed(() => {
+  if (algorithm.value !== 'POV' || !povExecutionTime.value) return ''
+  const [start, end] = povExecutionTime.value
+  return `${start?.slice(0, 5) || '即时'}-${end?.slice(0, 5) || '收盘'} ${povParticipation.value}%`
+})
 const draftPovExecutionTime = ref(null)
 const algorithmConfigNow = ref(new Date())
 const algorithmConfigTouched = ref(false)
@@ -374,8 +379,9 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
       </div>
       <template v-else-if="!usesAmount"><div class="quantity-input-row" :class="{ 'is-error': lotInvalid || quantityLimitError }"><el-input-number ref="quantityInput" :key="quantityInputKey" id="variant-quantity" v-model="quantity" placeholder="请输入" :disabled="customerOrderReadonly" :min="isCustomManualInstrument ? 1 : undefined" :step="unit === 'wan' ? 1 : (isCustomManualInstrument ? 1 : (lotSize || 100))" :precision="0" :controls="false" /><el-select v-model="unit" :disabled="customerOrderReadonly" aria-label="数量单位" popper-class="variant-popper quantity-unit-popper" placement="bottom-end" :offset="4" :class="{ 'is-wan-unit': unit === 'wan' }"><el-option label="股" value="shares" /><el-option label="万股" value="wan" /></el-select></div><span v-if="lotInvalid || quantityLimitError" class="lot-error" role="alert">{{ lotInvalid ? '订单数量须为整手，请重新输入' : quantityLimitError }}</span></template>
       <div v-else class="quantity-input-row amount-input-row" :class="{ 'is-error': quantityLimitError, 'is-large-amount': isLargeAmount }"><el-input-number :key="quantityInputKey" id="variant-amount" v-model="displayedAmount" placeholder="请输入" :disabled="customerOrderReadonly" :step="amountUnit === 'wan' ? 1 : 1000" :precision="2" :controls="false" /><el-select v-model="amountUnit" :disabled="customerOrderReadonly" aria-label="金额单位" popper-class="variant-popper quantity-unit-popper" placement="bottom-end" :offset="4" :class="{ 'is-wan-unit': amountUnit === 'wan' }"><el-option label="元" value="yuan" /><el-option label="万元" value="wan" /></el-select></div><span v-if="usesAmount && quantityLimitError" class="lot-error" role="alert">{{ quantityLimitError }}</span>
+      <el-slider v-if="executionType === 'lowTouch'" v-model="fraction" :disabled="customerOrderReadonly" :step="1" :marks="{0:'0%',25:'25%',50:'50%',75:'75%',100:'100%'}" @input="size" />
       <section class="order-account-block order-algorithm-block">
-        <div class="field-caption"><span>算法</span></div>
+        <div class="field-caption"><span>算法</span><span v-if="povSummary" class="algorithm-summary" :title="povSummary">{{ povSummary }}</span></div>
         <ExecutionAlgorithmTabs v-model="algorithm" v-model:visible="algorithmPopoverVisible" :disabled="customerOrderReadonly" @show="openAlgorithmConfig">
           <div class="execution-algorithm-menu">
             <span>POV 参数</span>
@@ -397,7 +403,6 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
           </div>
         </ExecutionAlgorithmTabs>
       </section>
-      <el-slider v-if="executionType === 'lowTouch'" v-model="fraction" :disabled="customerOrderReadonly" :step="1" :marks="{0:'0%',25:'25%',50:'50%',75:'75%',100:'100%'}" @input="size" />
       <div v-if="executionType === 'lowTouch'" class="capacity-pair" :class="{ 'is-single': lockedContext && sourceOrderSide }"><div v-if="!lockedContext || sourceOrderSide !== 'sell'">最大可买<b>{{ number(maxBuy) }} 股</b></div><div v-if="!lockedContext || sourceOrderSide === 'sell'"><div class="total-heading"><span>最大可卖</span><el-tooltip content="最大可卖(名本) = 持仓均价*卖出股数（卖出股数暂不支持碎股，不满足1手按照1手处理，向下取整）" placement="top" popper-class="order-help-popper"><button type="button" class="total-help" aria-label="最大可卖说明"><el-icon><InfoFilled /></el-icon></button></el-tooltip></div><b>{{ number(maxSell) }} 股</b></div></div>
     </section>
     <section v-if="executionType === 'highTouch' || customerOrderReadonly" class="order-note-block"><div class="field-caption"><label for="manual-order-note">备注</label></div><el-input id="manual-order-note" v-model="note" type="textarea" :rows="3" maxlength="200" show-word-limit placeholder="请输入备注" /></section>
@@ -408,6 +413,10 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
 </template>
 
 <style scoped>
+.order-form .order-algorithm-block{grid-template-columns:minmax(0,1fr) auto;column-gap:8px}
+.order-form .order-algorithm-block .field-caption{display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap}
+.order-form .order-algorithm-block .field-caption>span:first-child{color:var(--el-text-color-primary)}
+.algorithm-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--el-text-color-secondary);font-family:var(--ft-font-numeric);font-size:11px;font-weight:400;white-space:nowrap}
 .buy-capacity-warning{margin:0 0 16px;color:var(--ft-color-up-strong);font-size:12px;line-height:18px}
 .percentage-input-row > .el-input{flex:1;min-width:0}
 .percentage-input-row :deep(.el-input__wrapper){border-radius:3px 0 0 3px}

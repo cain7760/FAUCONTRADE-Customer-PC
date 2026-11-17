@@ -59,10 +59,12 @@ function selectDma() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-width: 64px;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 54px;
+  min-width: 54px;
   height: 24px;
-  padding: 0 10px;
+  padding: 0 6px;
   border: 1px solid var(--el-border-color);
   border-radius: 2px 0 0 2px;
   background: transparent;

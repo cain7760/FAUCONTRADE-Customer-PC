@@ -118,7 +118,7 @@ async function submitLogin() {
             <p v-if="errorMessage" class="login-submit-error" role="alert">{{ errorMessage }}</p>
             <el-button class="login-submit" type="primary" native-type="submit" :loading="submitting">{{ submitting ? '正在登录' : '登录' }}</el-button>
           </el-form>
-          <p class="login-demo-note">演示环境，输入用户名与密码即可体验</p>
+          <p class="login-demo-note">demo环境，随意输入用户名与密码即可登录</p>
         </div>
       </section>
     </div>
