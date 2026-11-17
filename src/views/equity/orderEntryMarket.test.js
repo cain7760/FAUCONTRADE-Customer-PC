@@ -139,6 +139,7 @@ test('下单和平仓共用票据、改单均保存起止时间并兼容旧运�
   const scope = vue.effectScope()
   const ticket = scope.run(() => setup('./components/OrderTicket.vue', propsFor()))
   ticket.algorithm.value = 'POV'
+  ticket.openAlgorithmConfig()
   ticket.draftPovExecutionTime.value = ['11:00', '14:00']
   ticket.confirmAlgorithmConfig()
   assert.equal(ticket.povHours.value, 3)
@@ -160,6 +161,7 @@ test('下单和平仓共用票据、改单均保存起止时间并兼容旧运�
   assert.equal(amend.povInvalid.value, true)
   assert.equal(amend.canSubmit.value, false)
   amend.algorithm.value = 'POV'
+  amend.openAlgorithmConfig()
   amend.draftPovExecutionTime.value = ['10:03', '11:03']
   amend.confirmAlgorithmConfig()
   assert.equal(amend.povInvalid.value, false)
@@ -357,3 +359,26 @@ test('自定义手工标的保留原可用资金豁免', async () => {
   assert.equal(events.find(([event]) => event === 'order')[1].isManual, true)
   scope.stop()
 })
+
+for (const name of ['TWAP', 'VWAP']) {
+  test(`${name} 共用时间参数并保留真实算法类型提交`, () => {
+    const scope = vue.effectScope(), events = []
+    const form = scope.run(() => setup('./components/OrderTicket.vue', propsFor(a), events))
+    form.algorithm.value = name
+    form.openAlgorithmConfig()
+    form.draftPovExecutionTime.value = ['10:00', '11:00']
+    form.draftPovParticipation.value = 20
+    form.confirmAlgorithmConfig()
+    form.price.value = 12
+    form.quantity.value = 100
+    form.preview('buy')
+    assert.equal(form.snapshot.value.algorithm, name)
+    assert.deepEqual(form.snapshot.value.algorithmParams.executionTime, ['10:00', '11:00'])
+    form.submit()
+    const order = events.find(([event]) => event === 'order')?.[1]
+    assert.equal(order.algorithm, name)
+    assert.equal(order.algorithmParams.participation, 20)
+    assert.deepEqual(order.algorithmParams.executionTime, ['10:00:00', '11:00:00'])
+    scope.stop()
+  })
+}

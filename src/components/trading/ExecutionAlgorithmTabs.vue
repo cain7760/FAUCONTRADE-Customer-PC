@@ -1,8 +1,8 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 
-defineProps({ modelValue: String, visible: Boolean, disabled: Boolean })
-const emit = defineEmits(['update:modelValue', 'update:visible', 'show'])
+defineProps({ modelValue: String, draftValue: String, visible: Boolean, disabled: Boolean })
+const emit = defineEmits(['update:draftValue', 'update:visible', 'show'])
 const tabs = ref()
 const popoverWidth = 282
 let panel
@@ -28,28 +28,33 @@ onMounted(() => {
   panel = tabs.value.closest('.ticket-pane') || tabs.value.closest('.order-form')
 })
 
-function selectDma() {
-  emit('update:visible', false)
-  emit('update:modelValue', 'DMA')
-}
+const algorithms = ['POV', 'DMA', 'TWAP', 'VWAP']
 </script>
 
 <template>
-  <div ref="tabs" class="execution-algorithm-tabs" role="group" aria-label="执行算法">
-    <el-popover :visible="visible" @update:visible="emit('update:visible', $event)" trigger="click" :disabled="disabled" placement="bottom-end" :width="popoverWidth" :popper-options="popperOptions" popper-class="variant-popper algorithm-popper pov-parameters-popper" @before-enter="emit('show')">
+  <div ref="tabs" class="execution-algorithm-tabs">
+    <el-popover :visible="visible" @update:visible="emit('update:visible', $event)" trigger="click" :disabled="disabled" placement="bottom-end" :width="popoverWidth" :popper-options="popperOptions" :popper-class="['variant-popper algorithm-popper pov-parameters-popper', { 'is-dma': draftValue === 'DMA' }]" @before-enter="emit('show')">
       <template #reference>
-        <button type="button" class="execution-algorithm-tab" :class="{ 'is-active': modelValue === 'POV' }" :disabled="disabled" :aria-pressed="modelValue === 'POV'" :aria-expanded="visible" aria-label="POV，配置参数" @click="emit('update:modelValue', 'POV')">
-          POV
-          <svg class="execution-algorithm-chevron" :class="{ 'is-open': visible }" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg>
-        </button>
+        <button type="button" class="algorithm-trigger" :disabled="disabled" :aria-expanded="visible" :aria-label="`执行算法：${modelValue}，点击配置`"><span>{{ modelValue }}</span><svg class="execution-algorithm-chevron" :class="{ 'is-open': visible }" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m3 4.5 3 3 3-3" /></svg></button>
       </template>
-      <slot />
+      <div class="algorithm-selection-menu">
+        <span class="algorithm-selection-heading">执行算法</span>
+        <div class="algorithm-selection-tabs" role="group" aria-label="执行算法">
+          <button v-for="value in algorithms" :key="value" type="button" class="execution-algorithm-tab" :class="{ 'is-active': draftValue === value }" :disabled="disabled" :aria-pressed="draftValue === value" @click="emit('update:draftValue', value)">{{ value }}</button>
+        </div>
+        <slot />
+      </div>
     </el-popover>
-    <button type="button" class="execution-algorithm-tab" :class="{ 'is-active': modelValue === 'DMA' }" :disabled="disabled" :aria-pressed="modelValue === 'DMA'" @click="selectDma">DMA</button>
   </div>
 </template>
 
 <style scoped>
+.algorithm-trigger { display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;height:20px;padding:0 4px;border:0;background:transparent;color:var(--el-text-color-primary);font:inherit;font-size:12px;cursor:pointer; }
+.algorithm-selection-menu { display:grid;gap:16px;color:var(--el-text-color-primary); }
+.algorithm-selection-heading { color:var(--el-text-color-secondary);font-size:12px; }
+.algorithm-selection-tabs { display:flex;width:100%; }
+.algorithm-selection-tabs .execution-algorithm-tab { flex:1;min-width:0;width:auto; }
+
 .execution-algorithm-tabs {
   display: inline-flex;
   justify-self: end;
@@ -63,10 +68,11 @@ function selectDma() {
   box-sizing: border-box;
   width: 54px;
   min-width: 54px;
-  height: 24px;
+  height: 28px;
+  min-height: 28px;
   padding: 0 6px;
   border: 1px solid var(--el-border-color);
-  border-radius: 2px 0 0 2px;
+  border-radius: 0;
   background: transparent;
   color: var(--el-text-color-secondary);
   font: inherit;
@@ -75,8 +81,9 @@ function selectDma() {
 }
 .execution-algorithm-tab + .execution-algorithm-tab {
   margin-left: -1px;
-  border-radius: 0 2px 2px 0;
 }
+.execution-algorithm-tab:first-child { border-radius: 2px 0 0 2px; }
+.execution-algorithm-tab:nth-child(4) { border-radius: 0 2px 2px 0; }
 .execution-algorithm-tab.is-active {
   position: relative;
   border-color: var(--el-color-primary);
@@ -102,11 +109,15 @@ function selectDma() {
 
 <style>
 .el-popper.pov-parameters-popper {
-  height: 264px;
+  min-height: 264px;
+  padding-bottom: 0;
+  height: auto;
 }
+.el-popper.pov-parameters-popper.is-dma { min-height: 0; }
 .pov-parameters-popper .execution-algorithm-menu {
-  height: 100%;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 .pov-parameters-popper .algorithm-popper-params {
   align-content: start;
@@ -129,9 +140,14 @@ function selectDma() {
 }
 .pov-parameters-popper .algorithm-param-input small {
   color: var(--el-text-color-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .pov-parameters-popper .algorithm-menu-actions {
+  display: flex;
+  align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 12px 0;
 }
 </style>

@@ -18,7 +18,7 @@ import { canUseMarketOrder, normalizeOrderType, orderTypeError } from '../orderM
 const props = defineProps({ instruments: Array, accounts: Array, symbol: Object, account: Object, quote: Object, paused: Boolean, lockedContext: Boolean, customerOrderReadonly: Boolean, closeMode: Boolean, showFramework: Boolean, ticketContext: Object, initialOrder: Object, counterparties: { type: Array, default: () => [] } })
 const tradingTimeError = inject(tradingTimeErrorKey, () => '')
 const emit = defineEmits(['select', 'account-select', 'order'])
-const algorithmValues = ['POV', 'DMA']
+const algorithmValues = ['POV', 'DMA', 'TWAP', 'VWAP']
 const algorithmDisplay = value => value === 'none' ? 'DMA' : value
 const initialAlgorithm = [props.initialOrder?.algorithm, props.ticketContext?.algorithm]
   .map(algorithmDisplay).find(value => algorithmValues.includes(value)) || defaultAlgorithmForMarket(props.symbol?.market)
@@ -27,14 +27,10 @@ const executionType = ref(initialExecutionType === 'highTouch' ? 'highTouch' : '
 const counterparty = ref(props.initialOrder?.counterparty || '')
 const povHours = ref(props.initialOrder?.algorithmParams?.hours ?? 1)
 const povMinutes = ref(props.initialOrder?.algorithmParams?.minutes ?? 0)
-const povParticipation = ref(props.initialOrder?.algorithmParams?.participation ?? 10)
+const povParticipation = ref(props.initialOrder?.algorithmParams?.participation ?? 25)
+const draftAlgorithm = ref(algorithm.value)
 const draftPovParticipation = ref(povParticipation.value)
 const povExecutionTime = ref(props.initialOrder?.algorithmParams?.executionTime?.slice() || null)
-const povSummary = computed(() => {
-  if (algorithm.value !== 'POV' || !povExecutionTime.value) return ''
-  const [start, end] = povExecutionTime.value
-  return `${start?.slice(0, 5) || '即时'}-${end?.slice(0, 5) || '收盘'} ${povParticipation.value}%`
-})
 const draftPovExecutionTime = ref(null)
 const algorithmConfigNow = ref(new Date())
 const algorithmConfigTouched = ref(false)
@@ -109,8 +105,8 @@ const sourceAccountLabel = computed(() => props.customerOrderReadonly ? props.in
 const sourceFrameworkName = computed(() => props.customerOrderReadonly ? props.initialOrder?.frameworkName || '' : selectedFramework.value?.name || '')
 const hasInvalidPovParameters = (hours, minutes, participation) => !isValidPovDuration(hours, minutes)
   || Number(participation) <= 0 || Number(participation) > 25
-const povParameterError = computed(() => algorithm.value === 'POV' && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
-const draftPovParameterError = computed(() => povParametersError(ticketSymbol.value, { executionTime: draftPovExecutionTime.value, participation: draftPovParticipation.value }, algorithmConfigNow.value, true))
+const povParameterError = computed(() => ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
+const draftPovParameterError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povParametersError(ticketSymbol.value, { executionTime: draftPovExecutionTime.value, participation: draftPovParticipation.value }, algorithmConfigNow.value, true))
 const algorithmValid = computed(() => !povParameterError.value)
 const usesPercentage = computed(() => executionType.value === 'lowTouch' && quantityMode.value === 'percentage')
 const percentageUnitLabel = computed(() => sourceOrderSide.value === 'buy' ? '最大可买' : sourceOrderSide.value === 'sell' ? '最大可卖' : '最大可买/可卖')
@@ -218,6 +214,7 @@ function openAlgorithmConfig() {
   algorithmConfigTouched.value = false
   if (props.customerOrderReadonly) return
   algorithmConfigNow.value = new Date()
+  draftAlgorithm.value = algorithm.value
   draftPovExecutionTime.value = povExecutionTime.value?.slice() || ['', '']
   draftPovParticipation.value = povParticipation.value
 }
@@ -225,6 +222,8 @@ function cancelAlgorithmConfig() { algorithmPopoverVisible.value = false }
 function confirmAlgorithmConfig() {
   algorithmConfigNow.value = new Date()
   if (draftPovParameterError.value) return
+  algorithm.value = draftAlgorithm.value
+  if (algorithm.value === 'DMA') { algorithmPopoverVisible.value = false; return }
   povExecutionTime.value = draftPovExecutionTime.value?.slice() || ['', '']
   const duration = executionDurationMinutes(ticketSymbol.value, povExecutionTime.value, algorithmConfigNow.value, true, true)
   if (duration > 0) {
@@ -256,7 +255,7 @@ watch(() => props.initialOrder, value => {
   povExecutionTime.value = value.algorithmParams?.executionTime?.slice() || null
   povHours.value = value.algorithmParams?.hours ?? 1
   povMinutes.value = value.algorithmParams?.minutes ?? 0
-  povParticipation.value = value.algorithmParams?.participation ?? 10
+  povParticipation.value = value.algorithmParams?.participation ?? 25
   nextTick(() => { applyingInitialOrder = false })
 }, { deep: true })
 watch(() => props.account.id, () => { if (props.customerOrderReadonly) return; applyAccountFramework(props.account); resetOrder() })
@@ -299,7 +298,7 @@ function preview(side) {
   if (!(side === 'buy' ? canBuy.value : canSell.value)) return
   const povTimeError = povOrderTimeError({ ...ticketSymbol.value, algorithm: algorithm.value, executionType: executionType.value })
   if (povTimeError) { ElMessage.error(povTimeError); return }
-  const scheduleError = algorithm.value === 'POV' && executionType.value !== 'highTouch'
+  const scheduleError = ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && executionType.value !== 'highTouch'
     ? povParametersError(ticketSymbol.value, { hours: povHours.value, minutes: povMinutes.value, participation: povParticipation.value, executionTime: povExecutionTime.value }) : ''
   if (scheduleError) { ElMessage.error(scheduleError); return }
   const orderQuantity = side === 'buy' ? buyShares.value : sellShares.value
@@ -308,7 +307,7 @@ function preview(side) {
     return
   }
   const id = Date.now()
-  snapshot.value = { id, orderNo: `WT${id}`, account: sourceAccountValue.value, accountLabel: sourceAccountLabel.value, ...(props.showFramework && sourceFrameworkName.value ? { frameworkId: frameworkId.value, framework: sourceFrameworkName.value } : {}), ...(props.counterparties.length ? { counterparty: selectedCounterparty.value, executionChannel: selectedCounterparty.value ? 'counterparty' : 'offline' } : {}), ...(algorithm.value === 'POV' ? { algorithmParams: { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value), executionTime: povExecutionTime.value?.slice() || null } } : {}), code: ticketSymbol.value.code, name: ticketSymbol.value.name, market: ticketSymbol.value.market, currency: ticketSymbol.value.currency || (ticketSymbol.value.market === 'HK' ? 'HKD' : 'CNY'), lotSize: lotSize.value, isManual: !!ticketSymbol.value.isManual, executionType: executionType.value, algorithm: algorithm.value, note: note.value.trim(), type: orderType.value, side, quantity: orderQuantity, inputAmount: usesAmount.value ? amount.value : null, price: orderType.value === 'limit' ? price.value : null, estimate: estimatedPrice.value * orderQuantity, status: '待报', runStatus: '正常', openClose: props.initialOrder?.openClose || (props.closeMode ? '平' : '开'), attribute: `${orderType.value === 'limit' ? '限价' : '市价'}·${usesAmount.value ? '金额' : '数量'}`, orderValueNumber: usesAmount.value ? amount.value : orderQuantity, orderValue: usesAmount.value ? `${money(amount.value || 0)} CNY` : `${number(orderQuantity)} 股`, filledQuantity: 0, filledPrice: null }
+  snapshot.value = { id, orderNo: `WT${id}`, account: sourceAccountValue.value, accountLabel: sourceAccountLabel.value, ...(props.showFramework && sourceFrameworkName.value ? { frameworkId: frameworkId.value, framework: sourceFrameworkName.value } : {}), ...(props.counterparties.length ? { counterparty: selectedCounterparty.value, executionChannel: selectedCounterparty.value ? 'counterparty' : 'offline' } : {}), ...(['POV', 'TWAP', 'VWAP'].includes(algorithm.value) ? { algorithmParams: { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value), executionTime: povExecutionTime.value?.slice() || null } } : {}), code: ticketSymbol.value.code, name: ticketSymbol.value.name, market: ticketSymbol.value.market, currency: ticketSymbol.value.currency || (ticketSymbol.value.market === 'HK' ? 'HKD' : 'CNY'), lotSize: lotSize.value, isManual: !!ticketSymbol.value.isManual, executionType: executionType.value, algorithm: algorithm.value, note: note.value.trim(), type: orderType.value, side, quantity: orderQuantity, inputAmount: usesAmount.value ? amount.value : null, price: orderType.value === 'limit' ? price.value : null, estimate: estimatedPrice.value * orderQuantity, status: '待报', runStatus: '正常', openClose: props.initialOrder?.openClose || (props.closeMode ? '平' : '开'), attribute: `${orderType.value === 'limit' ? '限价' : '市价'}·${usesAmount.value ? '金额' : '数量'}`, orderValueNumber: usesAmount.value ? amount.value : orderQuantity, orderValue: usesAmount.value ? `${money(amount.value || 0)} CNY` : `${number(orderQuantity)} 股`, filledQuantity: 0, filledPrice: null }
   confirming.value = true
 }
 function submit() {
@@ -319,7 +318,7 @@ function submit() {
   if (timeError) { ElMessage.error(timeError); return }
   const povTimeError = povOrderTimeError(snapshot.value)
   if (povTimeError) { ElMessage.error(povTimeError); return }
-  const scheduleError = snapshot.value.algorithm === 'POV' && snapshot.value.executionType !== 'highTouch'
+  const scheduleError = ['POV', 'TWAP', 'VWAP'].includes(snapshot.value.algorithm) && snapshot.value.executionType !== 'highTouch'
     ? povParametersError(snapshot.value, snapshot.value.algorithmParams || {}) : ''
   if (scheduleError) { ElMessage.error(scheduleError); return }
   // Demo submission uses current funds; production must use the backend order result.
@@ -328,7 +327,7 @@ function submit() {
     return
   }
   const order = { ...snapshot.value }
-  if (order.algorithm === 'POV' && order.executionType !== 'highTouch') {
+  if (['POV', 'TWAP', 'VWAP'].includes(order.algorithm) && order.executionType !== 'highTouch') {
     order.algorithmParams = { ...order.algorithmParams, executionTime: resolvePovExecutionTime(order, order.algorithmParams?.executionTime) }
     const [start, end] = order.algorithmParams.executionTime
     if (!start || !end || start >= end) { ElMessage.error('结束时间须晚于开始时间'); return }
@@ -381,16 +380,15 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
       <div v-else class="quantity-input-row amount-input-row" :class="{ 'is-error': quantityLimitError, 'is-large-amount': isLargeAmount }"><el-input-number :key="quantityInputKey" id="variant-amount" v-model="displayedAmount" placeholder="请输入" :disabled="customerOrderReadonly" :step="amountUnit === 'wan' ? 1 : 1000" :precision="2" :controls="false" /><el-select v-model="amountUnit" :disabled="customerOrderReadonly" aria-label="金额单位" popper-class="variant-popper quantity-unit-popper" placement="bottom-end" :offset="4" :class="{ 'is-wan-unit': amountUnit === 'wan' }"><el-option label="元" value="yuan" /><el-option label="万元" value="wan" /></el-select></div><span v-if="usesAmount && quantityLimitError" class="lot-error" role="alert">{{ quantityLimitError }}</span>
       <el-slider v-if="executionType === 'lowTouch'" v-model="fraction" :disabled="customerOrderReadonly" :step="1" :marks="{0:'0%',25:'25%',50:'50%',75:'75%',100:'100%'}" @input="size" />
       <section class="order-account-block order-algorithm-block">
-        <div class="field-caption"><span>算法</span><span v-if="povSummary" class="algorithm-summary" :title="povSummary">{{ povSummary }}</span></div>
-        <ExecutionAlgorithmTabs v-model="algorithm" v-model:visible="algorithmPopoverVisible" :disabled="customerOrderReadonly" @show="openAlgorithmConfig">
+        <div class="field-caption"><span>算法</span></div>
+        <ExecutionAlgorithmTabs :model-value="algorithm" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" :disabled="customerOrderReadonly" @show="openAlgorithmConfig">
           <div class="execution-algorithm-menu">
-            <span>POV 参数</span>
-            <div class="algorithm-popper-params" aria-label="POV 参数">
+            <div v-if="draftAlgorithm !== 'DMA'" class="algorithm-popper-params" :aria-label="`${draftAlgorithm} 参数`">
               <ExecutionTimeRange v-model="draftPovExecutionTime" :item="ticketSymbol" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
               <div class="algorithm-param-row">
                 <span>市场成交占比</span>
                 <div class="algorithm-param-input is-participation">
-                  <el-input-number v-model="draftPovParticipation" :min="1" :max="25" :precision="0" :controls="false" aria-label="POV市场成交占比" @change="algorithmConfigTouched = true" />
+                  <el-input-number v-model="draftPovParticipation" :min="1" :max="25" :precision="0" :controls="false" :aria-label="`${draftAlgorithm}市场成交占比`" @change="algorithmConfigTouched = true" />
                   <i>%</i><small>不超过 25%</small>
                 </div>
               </div>
@@ -413,10 +411,10 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
 </template>
 
 <style scoped>
+.order-form .capacity-pair .total-help { display: none; }
 .order-form .order-algorithm-block{grid-template-columns:minmax(0,1fr) auto;column-gap:8px}
 .order-form .order-algorithm-block .field-caption{display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap}
 .order-form .order-algorithm-block .field-caption>span:first-child{color:var(--el-text-color-primary)}
-.algorithm-summary{min-width:0;overflow:hidden;text-overflow:ellipsis;color:var(--el-text-color-secondary);font-family:var(--ft-font-numeric);font-size:11px;font-weight:400;white-space:nowrap}
 .buy-capacity-warning{margin:0 0 16px;color:var(--ft-color-up-strong);font-size:12px;line-height:18px}
 .percentage-input-row > .el-input{flex:1;min-width:0}
 .percentage-input-row :deep(.el-input__wrapper){border-radius:3px 0 0 3px}

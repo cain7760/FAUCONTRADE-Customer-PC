@@ -19,9 +19,10 @@ const emit = defineEmits(['update:modelValue', 'submit'])
 const quote = ref(null), executionType = ref('lowTouch'), side = ref('buy'), orderType = ref('limit')
 const price = ref(null), quantityMode = ref('quantity'), quantity = ref(null), amount = ref(null)
 const unit = ref('shares'), amountUnit = ref('yuan')
-const algorithm = ref('DMA'), povHours = ref(1), povMinutes = ref(0), povParticipation = ref(10)
+const algorithm = ref('DMA'), povHours = ref(1), povMinutes = ref(0), povParticipation = ref(25)
 const algorithmPopoverVisible = ref(false)
-const draftPovParticipation = ref(10)
+const draftAlgorithm = ref(algorithm.value)
+const draftPovParticipation = ref(25)
 const povExecutionTime = ref(null)
 const draftPovExecutionTime = ref(null)
 const algorithmConfigNow = ref(new Date())
@@ -72,8 +73,8 @@ const operation = computed(() => quantityDelta.value > 0 ? '追单' : quantityDe
 const hasInvalidPovParameters = (hours, minutes, participation) =>
   !isValidPovDuration(hours, minutes)
   || !Number.isInteger(Number(participation)) || Number(participation) < 1 || Number(participation) > 25
-const povInvalid = computed(() => algorithm.value === 'POV' && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
-const draftPovParameterError = computed(() => povParametersError(orderInstrument.value, { executionTime: draftPovExecutionTime.value, participation: draftPovParticipation.value }, algorithmConfigNow.value, true))
+const povInvalid = computed(() => ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
+const draftPovParameterError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povParametersError(orderInstrument.value, { executionTime: draftPovExecutionTime.value, participation: draftPovParticipation.value }, algorithmConfigNow.value, true))
 const changed = computed(() => {
   const order = props.order
   if (!order) return false
@@ -82,9 +83,9 @@ const changed = computed(() => {
     || (!isMarket.value && Number(price.value) !== Number(order.price))
     || quantityDelta.value !== 0 || (usesAmount.value ? Number(amount.value) !== Number(order.inputAmount) : order.inputAmount != null)
     || algorithm.value !== (algorithmDisplay(order.algorithm) || 'DMA')
-    || (algorithm.value === 'POV' && JSON.stringify([Number(povHours.value), Number(povMinutes.value), Number(povParticipation.value)])
+    || (['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && JSON.stringify([Number(povHours.value), Number(povMinutes.value), Number(povParticipation.value)])
       !== JSON.stringify([Number(order.algorithmParams?.hours ?? 1), Number(order.algorithmParams?.minutes ?? 0), Number(order.algorithmParams?.participation ?? 10)]))
-    || (algorithm.value === 'POV' && JSON.stringify(povExecutionTime.value) !== JSON.stringify(order.algorithmParams?.executionTime || null))
+    || (['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && JSON.stringify(povExecutionTime.value) !== JSON.stringify(order.algorithmParams?.executionTime || null))
     || note.value.trim() !== (order.orderRemark || order.note || '').trim()
 })
 const priceError = computed(() => !isMarket.value && (!Number.isFinite(effectivePrice.value) || effectivePrice.value <= 0) ? '请输入有效的限价。' : '')
@@ -144,6 +145,7 @@ function stepPrice(direction) {
 function openAlgorithmConfig() {
   algorithmConfigTouched.value = false
   algorithmConfigNow.value = new Date()
+  draftAlgorithm.value = algorithm.value
   draftPovExecutionTime.value = povExecutionTime.value?.slice() || ['', '']
   draftPovParticipation.value = povParticipation.value
 }
@@ -151,6 +153,8 @@ function cancelAlgorithmConfig() { algorithmPopoverVisible.value = false }
 function confirmAlgorithmConfig() {
   algorithmConfigNow.value = new Date()
   if (draftPovParameterError.value) return
+  algorithm.value = draftAlgorithm.value
+  if (algorithm.value === 'DMA') { algorithmPopoverVisible.value = false; return }
   povExecutionTime.value = draftPovExecutionTime.value?.slice() || ['', '']
   const duration = executionDurationMinutes(orderInstrument.value, povExecutionTime.value, algorithmConfigNow.value, true, true)
   if (duration > 0) {
@@ -163,12 +167,12 @@ function confirmAlgorithmConfig() {
 function submit() {
   formError.value = validationError.value || (!changed.value ? '请调整订单参数后再提交。' : '')
   if (formError.value) return
-  const scheduleError = algorithm.value === 'POV' && executionType.value !== 'highTouch'
+  const scheduleError = ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && executionType.value !== 'highTouch'
     ? povParametersError(orderInstrument.value, { hours: povHours.value, minutes: povMinutes.value, participation: povParticipation.value, executionTime: povExecutionTime.value }) : ''
   if (scheduleError) { formError.value = scheduleError; return }
   const timeError = tradingTimeError()
   if (timeError) { ElMessage.error(timeError); return }
-  const executionTime = algorithm.value === 'POV' ? resolvePovExecutionTime(orderInstrument.value, povExecutionTime.value) : null
+  const executionTime = ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) ? resolvePovExecutionTime(orderInstrument.value, povExecutionTime.value) : null
   if (executionTime && (!executionTime[0] || !executionTime[1] || executionTime[0] >= executionTime[1])) {
     formError.value = '结束时间须晚于开始时间'
     return
@@ -179,7 +183,7 @@ function submit() {
     price: isMarket.value ? null : Number(price.value), quantity: nextQuantity.value,
     inputAmount: usesAmount.value ? Number(amount.value) : null,
     algorithm: algorithm.value,
-    algorithmParams: algorithm.value === 'POV' ? { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value), executionTime } : null,
+    algorithmParams: ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) ? { hours: Number(povHours.value), minutes: Number(povMinutes.value), participation: Number(povParticipation.value), executionTime } : null,
     note: note.value.trim(), originalPrice: originalPrice.value,
     originalQuantity: originalQuantity.value, quantityDelta: quantityDelta.value, operation: operation.value,
   })
@@ -217,15 +221,14 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
           <p v-if="quantityError || operationHint" class="amend-order-hint" :class="{ 'is-error': quantityError }" role="status">{{ quantityError || operationHint }}</p>
           <section class="order-account-block order-algorithm-block">
             <div class="field-caption"><span>算法</span></div>
-            <ExecutionAlgorithmTabs v-model="algorithm" v-model:visible="algorithmPopoverVisible" @show="openAlgorithmConfig">
+            <ExecutionAlgorithmTabs :model-value="algorithm" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" @show="openAlgorithmConfig">
               <div class="execution-algorithm-menu">
-                <span>POV 参数</span>
-                <div class="algorithm-popper-params" aria-label="POV 参数">
+                <div v-if="draftAlgorithm !== 'DMA'" class="algorithm-popper-params" :aria-label="`${draftAlgorithm} 参数`">
                   <ExecutionTimeRange v-model="draftPovExecutionTime" :item="orderInstrument" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
                   <div class="algorithm-param-row">
                     <span>市场成交占比</span>
                     <div class="algorithm-param-input is-participation">
-                      <el-input-number v-model="draftPovParticipation" :min="1" :max="25" :precision="0" :controls="false" aria-label="POV市场成交占比" @change="algorithmConfigTouched = true" />
+                      <el-input-number v-model="draftPovParticipation" :min="1" :max="25" :precision="0" :controls="false" :aria-label="`${draftAlgorithm}市场成交占比`" @change="algorithmConfigTouched = true" />
                       <i>%</i><small>不超过 25%</small>
                     </div>
                   </div>
