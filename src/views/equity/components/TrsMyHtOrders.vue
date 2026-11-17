@@ -627,7 +627,7 @@ function placeEquityOrder() {
       unit: String(order.quantity || '').includes('万') ? 'wan' : 'shares',
       amountUnit: 'yuan',
       algorithm,
-      algorithmParams: algorithm === 'POV' ? order.algorithmParams || { hours: 1, minutes: 0, participation: 10 } : undefined,
+      algorithmParams: ['POV', 'TWAP', 'VWAP'].includes(algorithm) ? order.algorithmParams || { hours: 1, minutes: 0, participation: 10 } : undefined,
       skipQuantityLimit: true,
       counterparty: order.standard === '非标' ? 'offline' : '',
       counterparties: order.standard === '非标' ? [{ label: '线下单', value: 'offline' }] : undefined,
