@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
+import { marketClock, orderMarket } from '../../domain/orders/marketSession.js'
 import { executionTimeBounds, executionTimeError, executionShortcut } from '../../domain/orders/executionSchedule.js'
 
 const props = defineProps({
@@ -37,6 +38,13 @@ const povPickerOptions = {
   ],
 }
 const now = ref(new Date())
+const startPicker = ref()
+const defaultStartTime = computed(() => {
+  const [hour, minute] = marketClock(now.value, orderMarket(props.item || {}) || 'A').time.split(':').map(Number)
+  const value = new Date(now.value)
+  value.setHours(hour, minute, 0, 0)
+  return value
+})
 const touched = ref(false)
 const shortcutError = ref('')
 const range = computed({
@@ -60,11 +68,23 @@ const shortcutOptions = [
   ['close', '到下午收盘'],
 ]
 const shortcuts = computed(() => shortcutOptions.filter(([value]) => !props.hideTwoHour || value !== 120))
-function prepareTimePicker() {
+function prepareOptionalTimePicker(event) {
+  const picker = event.target.closest('.el-date-editor')
+  const index = [...timeRange.value.querySelectorAll('.el-date-editor')].indexOf(picker)
+  prepareTimePicker(index, event.type === 'click')
+}
+async function prepareTimePicker(index, openStart = false) {
+  const previousDefault = defaultStartTime.value.getTime()
   now.value = new Date()
   const panel = timeRange.value?.closest('.pov-parameters-popper')
   if (panel) pickerWidth.value = panel.getBoundingClientRect().width
   if (!props.optional && !range.value) range.value = executionShortcut(props.item, 10, now.value, 5, props.marketHours, props.unrestricted)
+  if (props.optional && index === 0 && (openStart || previousDefault !== defaultStartTime.value.getTime())) {
+    // 跨分钟展开时默认值会刷新，重建后的输入恢复焦点。
+    await nextTick()
+    startPicker.value?.focus()
+    startPicker.value?.handleOpen()
+  }
 }
 function timeDisabled(hour, minute, role) {
   const value = hour * 60 + minute
@@ -87,8 +107,8 @@ function selectShortcut(value) {
 <template>
   <section ref="timeRange" class="execution-time-range">
     <div class="field-caption"><label :class="{ required: !optional }">选择时间</label><span class="execution-time-hint">建议执行时长：大于10m</span></div>
-    <div v-if="optional" class="optional-time-range">
-      <el-time-picker v-for="(placeholder, index) in ['开始时间', '结束时间']" :key="index" :model-value="range?.[index]?.slice(0, 5) || null" format="HH:mm" value-format="HH:mm" :placeholder="placeholder" :aria-label="placeholder" :disabled="disabled" :append-to="pickerContainer" :popper-class="['variant-popper option-time-popper', { 'pov-time-popper': marketHours }]" :placement="index === 0 ? 'bottom-start' : 'bottom-end'" :popper-options="marketHours ? povPickerOptions : undefined" :popper-style="marketHours ? { width: `${endpointPickerWidth}px` } : undefined" @focus="prepareTimePicker" @update:model-value="updateEndpoint(index, $event)" />
+    <div v-if="optional" class="optional-time-range" @focusin.capture="prepareOptionalTimePicker" @click.capture="prepareOptionalTimePicker">
+      <el-time-picker v-for="(placeholder, index) in ['开始时间', '结束时间']" :key="index === 0 ? defaultStartTime.getTime() : index" :ref="picker => { if (index === 0) startPicker = picker }" :default-value="index === 0 ? defaultStartTime : undefined" :model-value="range?.[index]?.slice(0, 5) || null" format="HH:mm" value-format="HH:mm" :placeholder="placeholder" :aria-label="placeholder" :disabled="disabled" :append-to="pickerContainer" :popper-class="['variant-popper option-time-popper', { 'pov-time-popper': marketHours }]" :placement="index === 0 ? 'bottom-start' : 'bottom-end'" :popper-options="marketHours ? povPickerOptions : undefined" :popper-style="marketHours ? { width: `${endpointPickerWidth}px` } : undefined" @update:model-value="updateEndpoint(index, $event)" />
       <span class="time-range-separator">-</span>
     </div>
     <el-time-picker v-else v-model="range" :disabled-hours="disabledHours" :disabled-minutes="disabledMinutes" @focus="prepareTimePicker" is-range format="HH:mm" value-format="HH:mm" range-separator="-" start-placeholder="开始时间" end-placeholder="结束时间" aria-label="执行时间范围" :popper-class="['variant-popper option-time-popper', { 'pov-time-popper': marketHours }]" :placement="marketHours ? 'bottom-start' : 'bottom'" :popper-options="marketHours ? povPickerOptions : undefined" :popper-style="marketHours ? { width: `${pickerWidth}px` } : undefined" :disabled="disabled" @change="touched = true" />
