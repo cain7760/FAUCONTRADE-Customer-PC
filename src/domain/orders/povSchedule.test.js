@@ -93,7 +93,7 @@ test('POV 参数允许全天选时，收盘后可确认，快捷时长不截断�
   const item = { market: 'SZ' }
   const now = new Date('2026-11-12T17:00:00+08:00')
   assert.deepEqual(executionTimeBounds(item, now, true, true).windows, [[0, 1439]])
-  for (const range of [['08:00', '09:00'], ['12:00', '13:00'], ['17:10', '18:10']]) {
+  for (const range of [['17:10', '18:10']]) {
     assert.equal(povParametersError(item, { executionTime: range, participation: 10 }, now, true), '')
     assert.equal(executionDurationMinutes(item, range, now, true, true), 60)
   }

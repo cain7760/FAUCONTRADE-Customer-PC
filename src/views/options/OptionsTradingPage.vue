@@ -253,7 +253,7 @@ function exportRecords() {
 /* 与权益交易 13px 数值保持一致，表头继续使用原文本字号。 */
 .options-workspace :deep(.inquiry-size-value),
 .options-workspace :deep(td.inquiry-capacity-column>.cell),
-.options-workspace :deep(.options-opening-table td.is-right>.cell){font-size:13px;font-weight:500;}
+.options-workspace :deep(.options-opening-table td.is-right>.cell){font-size:13px;font-weight:400;}
 
 .options-workspace :deep(.option-reinquire){height:22px;padding:0 10px;border:1px solid var(--el-color-primary);border-radius:3px;color:var(--el-color-primary);background:transparent;font-size:12px;font-weight:400;cursor:pointer}
 .options-workspace :deep(.option-reinquire:disabled){opacity:.45;cursor:not-allowed}

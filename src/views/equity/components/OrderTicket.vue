@@ -4,7 +4,7 @@ import ExecutionTimeRange from '../../../components/trading/ExecutionTimeRange.v
 import ExecutionAlgorithmTabs from '../../../components/trading/ExecutionAlgorithmTabs.vue'
 import { executionDurationMinutes } from '../../../domain/orders/executionSchedule.js'
 import { tradingTimeErrorKey } from '../../../composables/useTradingTime.js'
-import { isValidPovDuration, povOrderTimeError, povParametersError, resolvePovExecutionTime } from '../../../domain/orders/povSchedule.js'
+import { isValidPovDuration, povOrderTimeError, povParametersError, povExecutionTimeError, povParticipationError, resolvePovExecutionTime } from '../../../domain/orders/povSchedule.js'
 import { inject, computed, nextTick, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp, CircleClose, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -113,6 +113,8 @@ const hasInvalidPovParameters = (hours, minutes, participation) => !isValidPovDu
   || Number(participation) <= 0 || Number(participation) > 25
 const povParameterError = computed(() => ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
 const draftPovParameterError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povParametersError(ticketSymbol.value, { executionTime: draftPovExecutionTime.value, participation: draftPovParticipation.value }, algorithmConfigNow.value, true))
+const draftPovTimeError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povExecutionTimeError(ticketSymbol.value, draftPovExecutionTime.value || ['', ''], algorithmConfigNow.value))
+const draftPovParticipationError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povParticipationError(draftPovParticipation.value))
 const algorithmValid = computed(() => !povParameterError.value)
 const usesPercentage = computed(() => executionType.value === 'lowTouch' && quantityMode.value === 'percentage')
 const percentageUnitLabel = computed(() => sourceOrderSide.value === 'buy' ? '最大可买' : sourceOrderSide.value === 'sell' ? '最大可卖' : '最大可买/可卖')
@@ -390,7 +392,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
         <ExecutionAlgorithmTabs :model-value="algorithm" :summary="algorithmSummary" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" :disabled="customerOrderReadonly" @show="openAlgorithmConfig">
           <div class="execution-algorithm-menu">
             <div v-if="draftAlgorithm !== 'DMA'" class="algorithm-popper-params" :aria-label="`${draftAlgorithm} 参数`">
-              <ExecutionTimeRange v-model="draftPovExecutionTime" :item="ticketSymbol" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
+              <ExecutionTimeRange v-model="draftPovExecutionTime" :validation-error="algorithmConfigTouched ? draftPovTimeError : ''" :item="ticketSymbol" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
               <div class="algorithm-param-row">
                 <span>市场成交占比</span>
                 <div class="algorithm-param-input is-participation">
@@ -398,7 +400,7 @@ useDialogShortcuts(manualInstrumentVisible, { confirm: saveManualInstrument, can
                   <i>%</i><small>不超过 25%</small>
                 </div>
               </div>
-              <p v-if="algorithmConfigTouched && draftPovParameterError" class="algorithm-param-error" role="alert">{{ draftPovParameterError }}</p>
+              <p v-if="algorithmConfigTouched && draftPovParticipationError" class="algorithm-param-error" role="alert">{{ draftPovParticipationError }}</p>
             </div>
             <footer class="algorithm-menu-actions">
               <el-button size="small" @click="cancelAlgorithmConfig">取消</el-button>

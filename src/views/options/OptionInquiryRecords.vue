@@ -170,7 +170,7 @@ defineExpose({ batchReinquire, selected, revealInquiries })
 .option-inquiry-table :deep(tbody tr.option-instrument-row>td.el-table__cell){background:#272a2e!important}
 .option-inquiry-table :deep(.inquiry-selection .cell){padding:0 12px!important;display:flex;justify-content:flex-start;align-items:center}
 .option-inquiry-table :deep(.el-checkbox__label){display:none}
-.option-inquiry-table .option-quote-rate{font-size:13px;font-weight:500}
+.option-inquiry-table .option-quote-rate{font-size:13px;font-weight:400}
 .option-inquiry-table .option-quote-rate.best{font-weight:500}
 .option-inquiry-table .option-best{display:inline-grid;place-items:center;width:16px;height:16px;padding:0;border:0;border-radius:3px;background:#b15b6a;color:#fff;font-size:11px;font-weight:400}
 

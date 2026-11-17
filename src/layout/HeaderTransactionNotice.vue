@@ -62,7 +62,7 @@ function openMessages() { expanded.value = false; emit('open-messages') }
 .transaction-detail-instrument .transaction-notice-status { padding: 2px 5px; border: 1px solid currentColor; border-radius: 3px; }
 .transaction-notice-detail dl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0; padding: 10px 0; border-top: 1px solid var(--el-border-color); border-bottom: 1px solid var(--el-border-color); }
 .transaction-notice-detail dt { color: var(--el-text-color-secondary); font-size: 11px; }
-.transaction-notice-detail dd { margin: 5px 0 0; color: var(--el-text-color-primary); font-family: var(--ft-font-numeric, inherit); font-size: 13px; font-variant-numeric: tabular-nums; }
+.transaction-notice-detail dd { margin: 5px 0 0; color: var(--el-text-color-primary); font-family: var(--ft-font-numeric, inherit); font-size: 13px; font-variant-numeric: tabular-nums; font-weight: 400; }
 .transaction-notice-all { margin-top: 10px; padding: 0; border: 0; background: transparent; color: var(--el-color-primary); font-size: 12px; }
 .header-transaction-slide-enter-active, .header-transaction-slide-leave-active { transition: transform .2s cubic-bezier(.2, .7, .2, 1), opacity .16s ease; }
 .header-transaction-slide-enter-from { opacity: 0; transform: translateY(-100%); }

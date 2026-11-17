@@ -99,7 +99,7 @@ useDialogShortcuts(visible, { cancel, confirm, ignoreEnterFrom: '.confirm-detail
 .confirm-section h3{margin:0 0 12px;color:var(--el-text-color-primary);font-size:14px;font-weight:500}
 .confirm-details{display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px 16px;margin:0;font-size:12px;line-height:1.5}
 .confirm-details dt{color:var(--el-text-color-secondary)}
-.confirm-details dd{font-size:13px;margin:0;text-align:right;overflow-wrap:anywhere;white-space:pre-wrap;font-weight:500;}
+.confirm-details dd{font-size:13px;margin:0;text-align:right;overflow-wrap:anywhere;white-space:pre-wrap;font-weight:400;}
 .confirm-details dd{font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums}
 </style>
 <style>

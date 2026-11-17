@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { executionTimeBounds, executionTimeError, executionShortcut } from '../../domain/orders/executionSchedule.js'
 
 const props = defineProps({
+  validationError: String,
   modelValue: Array,
   item: Object,
   disabled: Boolean,
@@ -91,8 +92,8 @@ function selectShortcut(value) {
       <span class="time-range-separator">-</span>
     </div>
     <el-time-picker v-else v-model="range" :disabled-hours="disabledHours" :disabled-minutes="disabledMinutes" @focus="prepareTimePicker" is-range format="HH:mm" value-format="HH:mm" range-separator="-" start-placeholder="开始时间" end-placeholder="结束时间" aria-label="执行时间范围" :popper-class="['variant-popper option-time-popper', { 'pov-time-popper': marketHours }]" :placement="marketHours ? 'bottom-start' : 'bottom'" :popper-options="marketHours ? povPickerOptions : undefined" :popper-style="marketHours ? { width: `${pickerWidth}px` } : undefined" :disabled="disabled" @change="touched = true" />
+    <p v-if="validationError || ((touched || showError) && error)" class="execution-time-error" role="alert">{{ validationError || error }}</p>
     <div class="execution-time-shortcuts" :class="{ 'is-five-shortcuts': hideTwoHour }"><button v-for="[value, label] in shortcuts" :key="value" type="button" :disabled="disabled" @click="selectShortcut(value)">{{ label }}</button></div>
-    <p v-if="(touched || showError) && error" class="execution-time-error" role="alert">{{ error }}</p>
   </section>
 </template>
 
@@ -101,14 +102,14 @@ function selectShortcut(value) {
 .optional-time-range{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);align-items:center;border:1px solid var(--el-border-color);border-radius:4px;background:var(--el-fill-color-blank)}
 .optional-time-range :deep(.el-date-editor.el-input){width:100%;min-width:0}
 .optional-time-range :deep(.el-input__wrapper){box-shadow:none;background:transparent;padding:0 6px}
-.optional-time-range :deep(.el-input__inner){font-family:var(--ft-font-numeric);font-size:13px;font-weight:500;text-align:center}
+.optional-time-range :deep(.el-input__inner){font-family:var(--ft-font-numeric);font-size:13px;font-weight:400;text-align:center}
 .optional-time-range :deep(.el-input__inner::placeholder){font-family:var(--el-font-family);font-weight:400}
 .optional-time-range :deep(.el-input:nth-child(2)){grid-column:3}
 .time-range-separator{grid-column:2;grid-row:1;text-align:center}
 .execution-time-range .field-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .execution-time-hint{color:var(--el-text-color-secondary);font-size:11px;white-space:nowrap}
 .execution-time-range :deep(.el-date-editor.el-input__wrapper){width:100%;height:32px;box-sizing:border-box;background:var(--el-fill-color-blank);box-shadow:0 0 0 1px var(--el-border-color) inset}
-.execution-time-range :deep(.el-range-input){background:transparent;color:var(--el-text-color-regular);font-family:var(--ft-font-numeric);font-size:13px;font-weight:500}
+.execution-time-range :deep(.el-range-input){background:transparent;color:var(--el-text-color-regular);font-family:var(--ft-font-numeric);font-size:13px;font-weight:400}
 .execution-time-range :deep(.el-range-input::placeholder){font-family:var(--el-font-family);font-weight:400}
 .execution-time-shortcuts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) repeat(2,minmax(0,1.8fr));gap:4px;margin-top:8px}
 .execution-time-shortcuts.is-five-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr)) repeat(2,minmax(0,1.8fr))}

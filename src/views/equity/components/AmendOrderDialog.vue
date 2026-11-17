@@ -3,7 +3,7 @@ import ExecutionTimeRange from '../../../components/trading/ExecutionTimeRange.v
 import ExecutionAlgorithmTabs from '../../../components/trading/ExecutionAlgorithmTabs.vue'
 import { executionDurationMinutes } from '../../../domain/orders/executionSchedule.js'
 import { tradingTimeErrorKey } from '../../../composables/useTradingTime.js'
-import { isValidPovDuration, povParametersError, resolvePovExecutionTime } from '../../../domain/orders/povSchedule.js'
+import { isValidPovDuration, povParametersError, povExecutionTimeError, povParticipationError, resolvePovExecutionTime } from '../../../domain/orders/povSchedule.js'
 import { inject, computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, ArrowUp, InfoFilled } from '@element-plus/icons-vue'
@@ -81,6 +81,8 @@ const hasInvalidPovParameters = (hours, minutes, participation) =>
   || !Number.isInteger(Number(participation)) || Number(participation) < 1 || Number(participation) > 25
 const povInvalid = computed(() => ['POV', 'TWAP', 'VWAP'].includes(algorithm.value) && hasInvalidPovParameters(povHours.value, povMinutes.value, povParticipation.value))
 const draftPovParameterError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povParametersError(orderInstrument.value, { executionTime: draftPovExecutionTime.value, participation: draftPovParticipation.value }, algorithmConfigNow.value, true))
+const draftPovTimeError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povExecutionTimeError(orderInstrument.value, draftPovExecutionTime.value || ['', ''], algorithmConfigNow.value))
+const draftPovParticipationError = computed(() => draftAlgorithm.value === 'DMA' ? '' : povParticipationError(draftPovParticipation.value))
 const changed = computed(() => {
   const order = props.order
   if (!order) return false
@@ -230,7 +232,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
             <ExecutionAlgorithmTabs :model-value="algorithm" :summary="algorithmSummary" v-model:draft-value="draftAlgorithm" v-model:visible="algorithmPopoverVisible" @show="openAlgorithmConfig">
               <div class="execution-algorithm-menu">
                 <div v-if="draftAlgorithm !== 'DMA'" class="algorithm-popper-params" :aria-label="`${draftAlgorithm} 参数`">
-                  <ExecutionTimeRange v-model="draftPovExecutionTime" :item="orderInstrument" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
+                  <ExecutionTimeRange v-model="draftPovExecutionTime" :validation-error="algorithmConfigTouched ? draftPovTimeError : ''" :item="orderInstrument" market-hours unrestricted hide-two-hour optional @update:model-value="algorithmConfigTouched = true" />
                   <div class="algorithm-param-row">
                     <span>市场成交占比</span>
                     <div class="algorithm-param-input is-participation">
@@ -238,7 +240,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
                       <i>%</i><small>不超过 25%</small>
                     </div>
                   </div>
-                  <p v-if="algorithmConfigTouched && draftPovParameterError" class="algorithm-param-error" role="alert">{{ draftPovParameterError }}</p>
+                  <p v-if="algorithmConfigTouched && draftPovParticipationError" class="algorithm-param-error" role="alert">{{ draftPovParticipationError }}</p>
                 </div>
                 <footer class="algorithm-menu-actions">
                   <el-button size="small" @click="cancelAlgorithmConfig">取消</el-button>

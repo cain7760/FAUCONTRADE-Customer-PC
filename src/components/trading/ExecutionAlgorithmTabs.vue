@@ -131,6 +131,7 @@ const algorithms = ['POV', 'DMA', 'TWAP', 'VWAP']
   padding: 0;
   overflow-y: auto;
 }
+.pov-parameters-popper .execution-time-hint { display: none; }
 .pov-parameters-popper .execution-time-range .execution-time-shortcuts {
   margin-top: 16px;
 }

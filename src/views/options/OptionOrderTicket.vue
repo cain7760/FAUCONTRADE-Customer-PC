@@ -207,7 +207,7 @@ function submitOrder() {
 .option-order-estimates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px; }
 .option-order-estimates>div { display:flex; flex-direction:column; gap:5px; min-width:0; }
 .option-order-estimates span { color:var(--el-text-color-secondary); font-size:11px; }
-.option-order-estimates b { font-size:13px; font-weight:500; overflow-wrap:anywhere; }
+.option-order-estimates b { font-size:13px; font-weight:400; overflow-wrap:anywhere; }
 
 .required::before{content:'*';color:var(--el-color-danger);margin-right:4px}
 .option-entry-modes{display:flex;width:100%;border-radius:4px;height:32px;background:var(--el-fill-color-light)}
@@ -225,7 +225,7 @@ function submitOrder() {
 .option-order-amounts :deep(.el-input__inner::placeholder){font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-weight:400}
 .option-order-amounts :deep(.el-input__wrapper){padding:0 10px;min-height:32px;box-sizing:border-box}
 .option-order-amounts :deep(.is-invalid .el-input__wrapper){box-shadow:0 0 0 1px var(--el-color-danger) inset}
-.option-numeric{font-size:13px;font-weight:500;}
+.option-numeric{font-size:13px;font-weight:400;}
 .option-numeric,.option-order-estimates b{font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums}
 :global(.option-algorithm-popper){--el-dropdown-menuItem-hover-fill:var(--el-fill-color-light);--el-dropdown-menuItem-hover-color:var(--el-color-primary)}
 </style>

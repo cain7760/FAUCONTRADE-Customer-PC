@@ -103,7 +103,7 @@ useDialogShortcuts(computed(() => props.modelValue), {
 .batch-upload-area{flex:1;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;border:1px dashed #555d68;background:var(--el-fill-color-light);cursor:pointer;color:var(--el-text-color-secondary)}.batch-upload-area>.el-icon{font-size:42px}.batch-upload-area strong{font-size:14px;font-weight:400;color:var(--el-text-color-regular)}.batch-upload-area.is-dragging{border-color:var(--el-color-primary);background:#353126}.batch-import-footnote{margin:12px 0 0;color:var(--el-text-color-secondary)}
 .batch-preview-table{--el-table-bg-color:#1e2023;--el-table-tr-bg-color:#1e2023;--el-table-header-bg-color:#25282d;--el-table-row-hover-bg-color:#2c3036;--el-table-border-color:#30343a;--el-table-text-color:#c2c6ce;--el-table-header-text-color:#969eaa;font-size:12px}.batch-preview-table .batch-invalid-row{--el-table-tr-bg-color:#302328}.batch-preview-table .el-button{font-size:12px}
 .batch-preview-table.el-table{flex:1;min-height:0}
-.batch-preview-table td.batch-numeric-column>.cell{font-size:13px;font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums;font-weight:500;}
+.batch-preview-table td.batch-numeric-column>.cell{font-size:13px;font-family:var(--ft-font-numeric);font-variant-numeric:tabular-nums;font-weight:400;}
 /* auto 布局将表头放进 body，固定列在所有横向滚动位置都使用同一表头背景。 */
 .batch-preview-table.el-table th.el-table-fixed-column--left,.batch-preview-table.el-table th.el-table-fixed-column--right{background:var(--el-table-header-bg-color)}
 .batch-preview-table.el-table td.el-table-fixed-column--left,.batch-preview-table.el-table td.el-table-fixed-column--right{background:var(--el-table-tr-bg-color)}

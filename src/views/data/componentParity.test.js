@@ -20,12 +20,12 @@ test('权益下单、平仓改单与期权下单共用执行时间控件，算�
   assert.match(control, /!props\.hideTwoHour \|\| value !== 120/)
 })
 
-test('期权描述的结构、期限及数值统一使用 13px、500 字重的数值样式', () => {
+test('期权描述的结构、期限及数值统一使用 13px、400 字重的数值样式', () => {
   const source = read('../options/OptionOrderTicket.vue')
   for (const label of ['期权结构', '期限', '规模(万)', '执行价(%)', '参与率(%)']) {
     assert.ok(source.includes(`<dt>${label}</dt><dd class="option-numeric">`))
   }
-  assert.match(source, /\.option-numeric\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;/)
+  assert.match(source, /\.option-numeric\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*400;/)
   assert.match(source, /\.option-numeric,[^{]+\{[^}]*font-family:\s*var\(--ft-font-numeric\)/)
 })
 
