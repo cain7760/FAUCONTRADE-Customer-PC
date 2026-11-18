@@ -17,11 +17,17 @@ defineEmits(['toggle-system', 'update:tradingTimeMode'])
       <slot />
     </span>
     <span>行情：静态快照</span>
-    <span class="status-end">方案版本：v{{ solutionVersion }}</span>
+    <span class="status-end">
+      <a class="portal-link" href="./portal/index.html" target="_blank" rel="noopener noreferrer">FAUCON TRADE官网门户</a>
+      <span>方案版本：v{{ solutionVersion }}</span>
+    </span>
   </footer>
 </template>
 
 <style scoped>
+.status-end { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
+.portal-link { padding: 1px 6px; border: 1px solid #655636; border-radius: 3px; color: #d6b773; line-height: 14px; text-decoration: none; }
+.portal-link:hover, .portal-link:focus-visible { color: #f1d598; border-color: currentColor; }
 .demo-trading-time { display: inline-flex; align-items: center; gap: 8px; margin-left: 12px; }
 .variants-app .demo-trading-time .system-status-toggle { margin-left: 0; padding: 0 4px; background: transparent; color: #8e949e; }
 .variants-app .demo-trading-time button[aria-pressed="true"] { color: #bb984a; }
