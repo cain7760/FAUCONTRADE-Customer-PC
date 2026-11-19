@@ -279,7 +279,7 @@ useDialogShortcuts(isOpen, { confirm: submit, cancel: close })
 .variants-app .amend-order-dialog .amend-order-capacity { margin-top: 12px; }
 .variants-app .amend-order-dialog .amend-order-capacity b,
 .variants-app .amend-order-dialog .amend-order-summary b { font-family: var(--ft-font-numeric); font-variant-numeric: tabular-nums; }
-.variants-app .amend-order-dialog .amend-order-summary b { font-weight: 500; }
+.variants-app .amend-order-dialog .amend-order-summary b { font-weight: 400; }
 .variants-app .amend-order-dialog .cp-order { display: flex; flex-direction: column; overflow: hidden; }
 /* Keep 12px side/bottom padding and add 8px above the amend form. */
 .variants-app .amend-order-dialog .cp-order > .order-form.amend-order-form { flex: 1; min-height: 0; max-height: none; padding: 20px 12px 12px!important; overflow-y: auto; }
