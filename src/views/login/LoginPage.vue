@@ -4,9 +4,11 @@ import { View, Hide, User, Lock, ArrowDown } from '@element-plus/icons-vue'
 import { clearRememberedDemoAccounts, enterDemoSession, readLastRememberedDemoLogin, readRememberedDemoAccounts, readRememberedDemoCredentials, readRememberPassword } from '../../domain/auth/demoSession.js'
 import logoCityComposite from '../../assets/login/logo-city-composite-dim.png'
 import cityBackground from '../../assets/login/hong-kong-abstract-dim.png'
+import financialDistrict from '../../assets/login/financial-district.webp'
 
 const logo = `${import.meta.env.BASE_URL}original-icons/logo-faucon-trade.png`
 const form = ref(null)
+const illustration = ref('falcon')
 const lastLogin = readRememberPassword() ? readLastRememberedDemoLogin() : { username: '', password: '' }
 const values = ref({ ...lastLogin, rememberPassword: readRememberPassword() })
 const submitting = ref(false)
@@ -68,23 +70,37 @@ async function submitLogin() {
   <main class="login-page">
     <img class="login-background" :src="cityBackground" alt="" aria-hidden="true" />
     <div class="login-panel">
-      <div class="login-visual" aria-hidden="true">
-        <div class="login-brand-scene">
-          <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" fetchpriority="high" />
-          <div class="login-falcon">
-            <div class="login-falcon-motion">
-              <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
-              <div class="login-brand-shimmer">
+      <div class="login-visual" :data-illustration="illustration">
+        <el-tabs v-model="illustration" class="login-illustrations" aria-label="登录插画方案">
+          <el-tab-pane label="游隼方案" name="falcon">
+            <div class="login-brand-scene" aria-hidden="true">
+              <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" fetchpriority="high" />
+              <div class="login-falcon">
+                <div class="login-falcon-motion">
+                  <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
+                  <div class="login-brand-shimmer">
+                    <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
+                  </div>
+                  <div class="login-falcon-eye"></div>
+                </div>
+              </div>
+              <div class="login-brand-stars"></div>
+              <div class="login-brand-water">
                 <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
               </div>
-              <div class="login-falcon-eye"></div>
             </div>
-          </div>
-          <div class="login-brand-stars"></div>
-          <div class="login-brand-water">
-            <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
-          </div>
-        </div>
+          </el-tab-pane>
+          <el-tab-pane label="金融街区方案" name="financial-district" lazy>
+            <div class="login-district">
+              <img :src="financialDistrict" width="1672" height="941" alt="" />
+              <div class="login-district-copy">
+                <h2>TRS 与期权<br />一体化交易终端</h2>
+                <p class="login-district-english" lang="en">Integrated TRS &amp; Options Trading Terminal</p>
+                <p>流程透明 丨 工具多样 丨 便捷操作</p>
+              </div>
+            </div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
       <section class="login-access" aria-labelledby="login-title">
         <div class="login-form-content">
@@ -215,7 +231,7 @@ async function submitLogin() {
   overflow: hidden;
   background: #1c232d;
 }
-.login-visual::after {
+.login-visual[data-illustration="falcon"]::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -223,6 +239,72 @@ async function submitLogin() {
     linear-gradient(to right, transparent 73%, rgb(0 0 0 / 30%)),
     linear-gradient(180deg, rgb(42 42 42 / 32%), rgb(42 42 42 / 14%) 55%, transparent) top / 100% 36% no-repeat;
   pointer-events: none;
+}
+.login-illustrations { position: absolute; inset: 0; }
+.login-illustrations :deep(.el-tabs__header) {
+  position: fixed;
+  bottom: 22px;
+  left: calc(50% + min(7.5vw, 76px) + 16px);
+  translate: -50% 0;
+  z-index: 2;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid rgb(180 191 204 / 24%);
+  border-radius: 5px;
+  background: rgb(15 19 25 / 86%);
+}
+.login-illustrations :deep(.el-tabs__nav-wrap) { margin: 0; }
+.login-illustrations :deep(.el-tabs__nav-wrap::after),
+.login-illustrations :deep(.el-tabs__active-bar) { display: none; }
+.login-illustrations :deep(.el-tabs__nav-wrap .el-tabs__item) {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 3px;
+  color: #c7cdd4;
+  font-size: 12px;
+  font-weight: 400;
+}
+.login-illustrations :deep(.el-tabs__item:hover),
+.login-illustrations :deep(.el-tabs__item.is-active) { color: #f0d59d; }
+.login-illustrations :deep(.el-tabs__item.is-active) { background: rgb(190 154 76 / 22%); }
+.login-illustrations :deep(.el-tabs__content),
+.login-illustrations :deep(.el-tab-pane) { position: absolute; inset: 0; }
+.login-district { position: absolute; inset: 0; display: grid; align-items: end; }
+.login-district img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 59% center;
+}
+.login-district::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgb(8 12 18 / 96%), rgb(8 12 18 / 72%) 34%, transparent 68%);
+  pointer-events: none;
+}
+.login-district-copy {
+  position: relative;
+  z-index: 1;
+  margin: 0 clamp(24px, 3.4vw, 52px) clamp(78px, 10vh, 108px);
+  color: #f3f2ed;
+  text-shadow: 0 2px 14px rgb(0 0 0 / 38%);
+}
+.login-district-copy h2 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 52px);
+  line-height: 1.18;
+  font-weight: 650;
+}
+.login-district-copy p { margin: 12px 0 0; font-size: 15px; line-height: 1.5; color: #dfdfe4; }
+.login-district-copy .login-district-english {
+  margin-top: 9px;
+  color: #e2c58e;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
 .login-brand-scene {
   position: absolute;
@@ -380,6 +462,9 @@ async function submitLogin() {
   .login-brand-scene {
     mask-image: linear-gradient(transparent, #000 12%, #000 94%, transparent);
   }
+}
+@media (min-width: 741px) and (max-height: 760px) {
+  .login-page { padding-bottom: 72px; }
 }
 @media (max-width: 740px) {
   .login-page { padding: 24px 20px; }
