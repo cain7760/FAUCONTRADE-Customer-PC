@@ -415,7 +415,7 @@ async function submitLogin() {
     border-radius: 0 0 55% 53%;
     background: linear-gradient(154deg, #10151c 21%, #25282a 73%, #796f5d);
     transform-origin: center top;
-    animation: login-falcon-blink 5s linear infinite;
+    animation: login-falcon-blink 4s linear infinite;
   }
 }
 @keyframes login-falcon-lift {
@@ -423,8 +423,8 @@ async function submitLogin() {
   to { transform: translateY(-1.65%); }
 }
 @keyframes login-falcon-blink {
-  0%, 32.4%, 38.4%, 100% { transform: scaleY(0); opacity: 0; }
-  34.08%, 35.16% { transform: scaleY(1); opacity: 1; }
+  0%, 40.5%, 48%, 100% { transform: scaleY(0); opacity: 0; }
+  42.6%, 43.95% { transform: scaleY(1); opacity: 1; }
 }
 @keyframes login-brand-shimmer {
   from { mask-position: 100% 0, center; opacity: 0; }
