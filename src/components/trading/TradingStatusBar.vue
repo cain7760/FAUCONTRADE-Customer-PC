@@ -18,7 +18,7 @@ defineEmits(['toggle-system', 'update:tradingTimeMode'])
     </span>
     <span>行情：静态快照</span>
     <span class="status-end">
-      <a class="portal-link" href="https://cain7760.github.io/FAUCONTRADE-Download-Portal/#flow" target="_blank" rel="noopener noreferrer">FAUCON TRADE官网门户</a>
+      <a class="portal-link" href="https://cain7760.github.io/FAUCONTRADE-Download-Portal/" target="_blank" rel="noopener noreferrer">FAUCON TRADE官网门户</a>
       <span>方案版本：v{{ solutionVersion }}</span>
     </span>
   </footer>
