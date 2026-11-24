@@ -25,7 +25,7 @@ function selectTerminal(terminal) {
   const localPreview = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
   const target = localPreview
     ? `${window.location.protocol}//${window.location.hostname}:4180/login.html`
-    : 'https://cain7760.github.io/FAUCONTRADE-Trader-PC/'
+    : 'https://cain7760.github.io/FAUCONTRADE-Trader-PC/login.html'
   window.location.assign(target)
 }
 
@@ -69,7 +69,22 @@ async function submitLogin() {
     <img class="login-background" :src="cityBackground" alt="" aria-hidden="true" />
     <div class="login-panel">
       <div class="login-visual" aria-hidden="true">
-        <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" fetchpriority="high" />
+        <div class="login-brand-scene">
+          <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" fetchpriority="high" />
+          <div class="login-falcon">
+            <div class="login-falcon-motion">
+              <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
+              <div class="login-brand-shimmer">
+                <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
+              </div>
+              <div class="login-falcon-eye"></div>
+            </div>
+          </div>
+          <div class="login-brand-stars"></div>
+          <div class="login-brand-water">
+            <img class="login-brand-art" :src="logoCityComposite" alt="" width="1122" height="1402" />
+          </div>
+        </div>
       </div>
       <section class="login-access" aria-labelledby="login-title">
         <div class="login-form-content">
@@ -195,34 +210,144 @@ async function submitLogin() {
 .login-intro { margin: 6px 0 0; color: var(--el-text-color-secondary); font-size: 12px; line-height: 18px; }
 .login-visual {
   position: relative;
+  isolation: isolate;
   min-width: 0;
   overflow: hidden;
-  background: #0d1114;
+  background: #1c232d;
 }
 .login-visual::after {
   content: '';
   position: absolute;
-  inset: 0 0 auto;
-  height: 36%;
-  background: linear-gradient(180deg, rgb(42 42 42 / 32%), rgb(42 42 42 / 14%) 55%, transparent);
+  inset: 0;
+  background:
+    linear-gradient(to right, transparent 73%, rgb(0 0 0 / 30%)),
+    linear-gradient(180deg, rgb(42 42 42 / 32%), rgb(42 42 42 / 14%) 55%, transparent) top / 100% 36% no-repeat;
   pointer-events: none;
 }
-.login-brand-art {
+.login-brand-scene {
   position: absolute;
-  inset: 0;
+  inset: 50% 0 auto;
+  translate: 0 -50%;
+}
+.login-brand-art {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  animation: login-brand-drift 18s ease-in-out infinite alternate;
+  height: auto;
+  filter: contrast(.88) brightness(1.06);
 }
-@keyframes login-brand-drift {
-  from { transform: scale(1.03) translateX(-.5%); }
-  to { transform: scale(1.07) translateX(.5%); }
+.login-brand-stars {
+  position: absolute;
+  inset: 0;
+  --star: rgb(198 215 232 / 35%);
+  --star-faint: rgb(198 215 232 / 22%);
+  background:
+    radial-gradient(circle at 9% 72%, var(--star-faint) .5px, transparent 1.3px),
+    radial-gradient(circle at 17% 75%, var(--star) .65px, transparent 1.35px),
+    radial-gradient(circle at 29% 73%, var(--star-faint) .4px, transparent 1.15px),
+    radial-gradient(circle at 36% 76%, var(--star-faint) .45px, transparent 1.1px),
+    radial-gradient(circle at 48% 73%, var(--star) .6px, transparent 1.35px),
+    radial-gradient(circle at 60% 74%, var(--star-faint) .55px, transparent 1.25px),
+    radial-gradient(circle at 68% 71%, var(--star-faint) .45px, transparent 1.15px),
+    radial-gradient(circle at 83% 71%, var(--star) .65px, transparent 1.4px),
+    radial-gradient(circle at 89% 75%, var(--star-faint) .5px, transparent 1.2px);
 }
-@media (prefers-reduced-motion: reduce) {
-  .login-brand-art { animation: none; }
+.login-brand-water {
+  /* The mirrored image and its clip share the source image's waterline. */
+  --waterline: 87.8%;
+  position: absolute;
+  inset: var(--waterline) 0 0;
+  overflow: hidden;
+  mix-blend-mode: screen;
+  mask-image: linear-gradient(#000, rgb(0 0 0 / 64%) 54%, transparent);
+}
+.login-brand-water .login-brand-art {
+  position: absolute;
+  bottom: 0;
+  transform: scaleY(-.58);
+  transform-origin: center var(--waterline);
+  filter: contrast(1.16) blur(.85px);
+  opacity: .76;
+}
+.login-brand-water::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(transparent 0 2px, rgb(9 15 23 / 16%) 3px 4px),
+    linear-gradient(rgb(193 159 101 / 9%), rgb(105 134 170 / 7%) 54%, transparent);
+}
+.login-falcon {
+  --falcon-offset: -36px;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  /* Feather the overlay into the original sky and leave the skyline fixed. */
+  mask-image:
+    linear-gradient(to right, transparent, #000 8% 84%, transparent 96%),
+    linear-gradient(transparent 9%, #000 17% 70.6%, transparent 73%);
+  mask-composite: intersect;
+  background: linear-gradient(to right, #20242b, #25272c 48%, #1c2028);
+}
+.login-falcon-motion {
+  position: absolute;
+  inset: 0;
+  translate: 0 var(--falcon-offset);
+}
+.login-falcon-motion > .login-brand-art {
+  mask-image: linear-gradient(#000 70.4%, transparent 71.8%);
+}
+.login-brand-shimmer { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .login-falcon-motion { animation: login-falcon-lift 2.4s linear infinite alternate; }
+  .login-brand-shimmer {
+    position: absolute;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+    mix-blend-mode: lighten;
+    opacity: 0;
+    /* Constrain the moving highlight to the falcon, above the skyline. */
+    mask-image:
+      linear-gradient(110deg, transparent 40%, #000 48% 52%, transparent 60%),
+      radial-gradient(ellipse 42% 25% at 47% 48%, #000 74%, transparent);
+    mask-size: 260% 100%, 100% 100%;
+    mask-position: 100% 0, center;
+    mask-repeat: no-repeat;
+    mask-composite: intersect;
+    animation: login-brand-shimmer 5.5s linear .15s infinite;
+  }
+  .login-brand-shimmer .login-brand-art { filter: contrast(1.43) brightness(1.47) saturate(1.08); }
+  .login-falcon-eye {
+    position: absolute;
+    /* Follow the eye opening in the source artwork. */
+    top: 35.65%;
+    left: 58.6%;
+    width: 10.7%;
+    height: 5.5%;
+    clip-path: polygon(2% 28%, 10% 14%, 26% 5%, 43% 6%, 60% 12%, 79% 23%, 99% 32%, 91% 50%, 78% 67%, 60% 86%, 43% 94%, 27% 95%, 14% 84%, 5% 67%);
+  }
+  .login-falcon-eye::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 0 0 55% 53%;
+    background: linear-gradient(154deg, #10151c 21%, #25282a 73%, #796f5d);
+    transform-origin: center top;
+    animation: login-falcon-blink 5s linear infinite;
+  }
+}
+@keyframes login-falcon-lift {
+  from { transform: translateY(0); }
+  to { transform: translateY(-1.65%); }
+}
+@keyframes login-falcon-blink {
+  0%, 32.4%, 38.4%, 100% { transform: scaleY(0); opacity: 0; }
+  34.08%, 35.16% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes login-brand-shimmer {
+  from { mask-position: 100% 0, center; opacity: 0; }
+  5%, 46% { opacity: .95; }
+  54%, to { mask-position: 0 0, center; opacity: 0; }
 }
 .login-form :deep(.el-form-item) { margin-bottom: 28px; }
 .login-form :deep(.el-form-item__label) { height: auto; padding: 0; margin-bottom: 10px; font-size: 14px; line-height: 20px; color: var(--el-text-color-regular); }
@@ -252,12 +377,8 @@ async function submitLogin() {
   .login-panel { aspect-ratio: auto; min-height: 640px; }
   .login-access { padding: 40px 32px; }
   .login-logo { width: 116px; }
-  .login-brand-art {
-    top: 50%;
-    bottom: auto;
-    height: auto;
-    translate: 0 -50%;
-    mask-image: linear-gradient(transparent, #000 12%, #000 88%, transparent);
+  .login-brand-scene {
+    mask-image: linear-gradient(transparent, #000 12%, #000 94%, transparent);
   }
 }
 @media (max-width: 740px) {
