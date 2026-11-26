@@ -22,15 +22,6 @@ const rules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
-function selectTerminal(terminal) {
-  if (terminal !== 'trader') return
-  const localPreview = ['127.0.0.1', 'localhost'].includes(window.location.hostname)
-  const target = localPreview
-    ? `${window.location.protocol}//${window.location.hostname}:4180/login.html`
-    : 'https://cain7760.github.io/FAUCONTRADE-Trader-PC/login.html'
-  window.location.assign(target)
-}
-
 function selectAccount(command) {
   if (command === 'clear') {
     clearRememberedDemoAccounts()
@@ -58,7 +49,19 @@ async function submitLogin() {
   submitting.value = true
   try {
     await enterDemoSession(values.value)
-    window.location.assign(new URL('equity-variants.html?layout=classic', window.location.href).href)
+    const login = new URL(window.location.href)
+    if (login.searchParams.get('from') === 'portal') {
+      if (!window.sessionStorage.getItem('faucon-demo-login-account')) {
+        throw new Error('Portal sign-in needs session storage')
+      }
+      const onPages = login.hostname === 'cain7760.github.io'
+      const portal = new URL(onPages ? '/FAUCONTRADE-Download-Portal/' : '/portal/design-v2/index.html', login)
+      const lang = login.searchParams.get('lang')
+      if (['zh-CN', 'zh-TW', 'en'].includes(lang)) portal.searchParams.set('lang', lang)
+      window.location.replace(portal.href)
+    } else {
+      window.location.assign(new URL('equity-variants.html?layout=classic', login).href)
+    }
   } catch {
     errorMessage.value = '暂时无法登录，请重试。'
     submitting.value = false
@@ -107,13 +110,6 @@ async function submitLogin() {
           <header class="login-heading">
             <div class="login-brand-row">
               <img class="login-logo" :src="logo" alt="FAUCON TRADE" width="132" height="34" />
-              <el-dropdown class="login-terminal-switch" trigger="click" placement="bottom-end" popper-class="login-terminal-popper" :show-arrow="false" @command="selectTerminal">
-                <button type="button" class="login-terminal-trigger" aria-label="选择交易终端">客户交易终端 <el-icon><ArrowDown /></el-icon></button>
-                <template #dropdown><el-dropdown-menu>
-                  <el-dropdown-item command="customer" class="current-terminal">客户交易终端</el-dropdown-item>
-                  <el-dropdown-item command="trader">交易员终端</el-dropdown-item>
-                </el-dropdown-menu></template>
-              </el-dropdown>
             </div>
             <div class="login-heading-title">
               <h1 id="login-title">欢迎登录</h1>
@@ -208,11 +204,7 @@ async function submitLogin() {
   min-width: 0;
   padding: 48px 56px;
 }
-.login-terminal-switch { flex: none; }
-.login-terminal-trigger { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border: 1px solid #544831; border-radius: 4px; background: rgb(187 152 74 / 12%); color: #c6aa6c; font-size: 11px; white-space: nowrap; }
-.login-terminal-trigger:hover { border-color: #bb984a; color: #d3ad64; }
-.login-terminal-trigger .el-icon { font-size: 11px; }
-.login-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 28px; }
+.login-brand-row { margin-bottom: 28px; }
 .login-logo {
   display: block;
   width: 132px;
@@ -475,10 +467,6 @@ async function submitLogin() {
 </style>
 
 <style>
-.login-terminal-popper.el-popper { --el-dropdown-menuItem-hover-fill: #30343a; --el-dropdown-menuItem-hover-color: #bb984a; border: 1px solid #3a3e45; background: #24272c; }
-.login-terminal-popper .el-dropdown-menu { background: #24272c; }
-.login-terminal-popper .el-dropdown-menu__item { min-width: 102px; min-height: 32px; padding: 0 8px; font-size: 12px; }
-.login-terminal-popper .current-terminal { color: #bb984a; }
 .login-account-popper.el-popper { --el-dropdown-menuItem-hover-fill: #30343a; --el-dropdown-menuItem-hover-color: #d3ad64; border: 1px solid #3a3e45; background: #24272c; }
 .login-account-popper .el-dropdown-menu { background: #24272c; }
 .login-account-popper .el-dropdown-menu__item { min-height: 32px; color: #cdd1d7; }
