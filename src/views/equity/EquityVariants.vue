@@ -12,6 +12,7 @@ import { positionMarginInCny } from './positionCurrency'
 import { useTicketDock } from './useTicketDock'
 import { useDialogShortcuts } from '../../composables/useDialogShortcuts'
 import BaseDialog from '../../components/BaseDialog.vue'
+import PasswordChangeForm from '../../components/auth/PasswordChangeForm.vue'
 import { addManualEquityOrderToPool, recordPlacedTrsOrder } from './trsOrderStore'
 import TradingAppShell from '../../layout/TradingAppShell.vue'
 import HeaderTransactionNotice from '../../layout/HeaderTransactionNotice.vue'
@@ -44,13 +45,7 @@ const systemNoticeEnabled = ref(true)
 const showUnreadBadge = ref(true)
 const settingsVisible = ref(false)
 const settingsDetail = ref(null)
-const passwordForm = ref({ verificationCode: '', password: '', passwordConfirmation: '' })
-const passwordFormError = ref('')
-const passwordFieldErrors = ref({ password: '', passwordConfirmation: '' })
-const passwordVerificationSent = ref(false)
-const passwordVerificationCountdown = ref(0)
-const passwordVerificationEmail = ref('')
-let passwordVerificationTimer = null
+const passwordChangeForm = ref(null)
 const activeSetting = ref('account')
 const language = ref('简体中文')
 const orderPrice = ref('最新价')
@@ -374,75 +369,12 @@ function scrollToSetting(key) {
   document.getElementById(`equity-${key}-setting`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 function saveSettings() { settingsDetail.value = null; settingsVisible.value = false }
-function closeSettings() { clearPasswordVerificationTimer(); settingsDetail.value = null; settingsVisible.value = false }
-function clearPasswordVerificationTimer() {
-  if (passwordVerificationTimer) window.clearInterval(passwordVerificationTimer)
-  passwordVerificationTimer = null
-}
-function openPasswordDialog() {
-  clearPasswordVerificationTimer()
-  passwordForm.value = { verificationCode: '', password: '', passwordConfirmation: '' }
-  passwordFormError.value = ''
-  passwordFieldErrors.value = { password: '', passwordConfirmation: '' }
-  passwordVerificationSent.value = false
-  passwordVerificationCountdown.value = 0
-  passwordVerificationEmail.value = ''
-  settingsDetail.value = 'password'
-}
-function closePasswordDialog() {
-  clearPasswordVerificationTimer()
-  settingsDetail.value = null
-}
-const passwordRule = /^(?=.*[A-Za-z])(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~])[A-Za-z0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]{8,}$/
-function validateNewPassword(force = false) {
-  const password = passwordForm.value.password
-  passwordFieldErrors.value.password = (!password && !force) || passwordRule.test(password)
-    ? ''
-    : '密码须包含英文字母与特殊符号，且长度不少于 8 位。'
-  if (passwordForm.value.passwordConfirmation) validatePasswordConfirmation()
-  return !passwordFieldErrors.value.password
-}
-function validatePasswordConfirmation(force = false) {
-  const { password, passwordConfirmation } = passwordForm.value
-  passwordFieldErrors.value.passwordConfirmation = (!passwordConfirmation && !force) || password === passwordConfirmation
-    ? ''
-    : '两次输入的密码不一致，请重新确认。'
-  return !passwordFieldErrors.value.passwordConfirmation
-}
-function sendPasswordVerificationCode() {
-  const email = passwordEmail.value
-  if (!email) {
-    passwordFormError.value = '开户邮箱不可用，请联系客服。'
-    return
-  }
-  passwordFormError.value = ''
-  passwordVerificationSent.value = true
-  passwordVerificationEmail.value = email
-  passwordVerificationCountdown.value = 60
-  clearPasswordVerificationTimer()
-  passwordVerificationTimer = window.setInterval(() => {
-    passwordVerificationCountdown.value -= 1
-    if (passwordVerificationCountdown.value <= 0) {
-      passwordVerificationCountdown.value = 0
-      passwordVerificationSent.value = false
-      clearPasswordVerificationTimer()
-    }
-  }, 1000)
-}
-function confirmPasswordChange() {
-  const { verificationCode } = passwordForm.value
-  const passwordValid = validateNewPassword(true)
-  const passwordConfirmationValid = validatePasswordConfirmation(true)
-  if (!passwordEmail.value) passwordFormError.value = '开户邮箱不可用，请联系客服。'
-  else if (!passwordVerificationSent.value) passwordFormError.value = '请先获取邮箱验证码。'
-  else if (passwordVerificationEmail.value !== passwordEmail.value) passwordFormError.value = '开户邮箱已变更，请重新获取验证码。'
-  else if (!/^\d{6}$/.test(verificationCode) || verificationCode !== '123456') passwordFormError.value = '邮箱验证码不正确。'
-  else if (!passwordValid || !passwordConfirmationValid) passwordFormError.value = ''
-  else {
-    passwordFormError.value = ''
-    closePasswordDialog()
-    ElMessage.success('密码已修改。')
-  }
+function closeSettings() { settingsDetail.value = null; settingsVisible.value = false }
+function openPasswordDialog() { settingsDetail.value = 'password' }
+function closePasswordDialog() { settingsDetail.value = null }
+function finishPasswordChange() {
+  closePasswordDialog()
+  ElMessage.success('密码已修改。')
 }
 function showEmergency(message) {
   if (message?.urgent) emergencyMessage.value = message
@@ -704,7 +636,7 @@ function handleGlobalAccountVisible(visible) { if (!visible) globalAccountSearch
 function selectTicketAccount(id) { accountId.value = id }
 watch(accountId, () => { quote.value = null })
 watch(collapsed, async () => { await nextTick(); table.value?.doLayout?.() })
-watch(settingsVisible, visible => { if (!visible) { clearPasswordVerificationTimer(); settingsDetail.value = null } })
+watch(settingsVisible, visible => { if (!visible) settingsDetail.value = null })
 function assetAmountParts(value, signed = false) {
   const amount = Math.abs(Number(value) || 0)
   const yi = Math.floor(amount / 100000000)
@@ -1011,7 +943,7 @@ function completeCancellation(row) {
 }
 useDialogShortcuts(cancelOrderVisible, { confirm: confirmCancelOrder, cancel: () => { cancelOrderVisible.value = false } })
 useDialogShortcuts(convertManualVisible, { confirm: confirmConvertToManual, cancel: () => { convertManualVisible.value = false; conversionRemark.value = '' } })
-useDialogShortcuts(settingsVisible, { confirm: () => settingsDetail.value === 'password' ? confirmPasswordChange() : saveSettings(), cancel: () => settingsDetail.value === 'password' ? closePasswordDialog() : closeSettings() })
+useDialogShortcuts(settingsVisible, { confirm: () => settingsDetail.value === 'password' ? passwordChangeForm.value?.submit() : saveSettings(), cancel: () => settingsDetail.value === 'password' ? closePasswordDialog() : closeSettings(), ignoreEnterFrom: '.password-code-action' })
 function updateViewportWidth() { viewportWidth.value = window.innerWidth }
 onMounted(() => {
   showHeaderNotice.value = localStorage.getItem(headerNoticeKey) !== '1'
@@ -1022,7 +954,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateViewportWidth)
-  clearPasswordVerificationTimer()
   window.clearTimeout(transactionToastTimer)
 })
 const recordTableContext = {
@@ -1071,16 +1002,10 @@ provide(tradingContextKey, recordTableContext)
     <BaseDialog v-model="settingsVisible" class="settings-dialog equity-settings-dialog" width="700px" :show-close="false" :close-on-click-modal="true" :close-on-press-escape="false" destroy-on-close>
       <template #header><div class="settings-title"><div v-if="settingsDetail === 'password'" class="settings-breadcrumb" aria-label="当前位置"><button type="button" @click="closePasswordDialog">系统设置</button><span>/</span><h2>修改密码</h2></div><h2 v-else>系统设置</h2><button class="settings-close" type="button" aria-label="关闭系统设置" @click="closeSettings"><el-icon><Close /></el-icon></button></div></template>
       <section v-if="settingsDetail === 'password'" class="settings-password-view">
-        <form class="password-change-form" @submit.prevent="confirmPasswordChange">
-          <label class="password-email-row"><span>验证邮箱</span><span class="password-email">{{ passwordEmail }}</span></label>
-          <label>邮箱验证码<div class="password-code-row"><el-input v-model.trim="passwordForm.verificationCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="请输入 6 位验证码" /><el-button class="password-code-action" :disabled="passwordVerificationCountdown > 0" native-type="button" @click="sendPasswordVerificationCode">{{ passwordVerificationCountdown ? `${passwordVerificationCountdown}s 后重发` : '获取验证码' }}</el-button></div></label>
-          <label>新密码<el-input v-model="passwordForm.password" :class="{ 'is-error': passwordFieldErrors.password }" type="password" show-password autocomplete="new-password" placeholder="请输入新密码" @blur="validateNewPassword()" @input="passwordForm.passwordConfirmation && validatePasswordConfirmation()" /><small v-if="!passwordFieldErrors.password">密码须包含英文字母与特殊符号，且长度不少于 8 位。</small><p v-if="passwordFieldErrors.password" class="password-field-error" role="alert">{{ passwordFieldErrors.password }}</p></label>
-          <label>重复密码<el-input v-model="passwordForm.passwordConfirmation" :class="{ 'is-error': passwordFieldErrors.passwordConfirmation }" type="password" show-password autocomplete="new-password" placeholder="请再次输入新密码" @blur="validatePasswordConfirmation()" /><p v-if="passwordFieldErrors.passwordConfirmation" class="password-field-error" role="alert">{{ passwordFieldErrors.passwordConfirmation }}</p></label>
-          <p v-if="passwordFormError" class="password-form-error" role="alert">{{ passwordFormError }}</p>
-        </form>
+        <PasswordChangeForm ref="passwordChangeForm" :email="passwordEmail" @success="finishPasswordChange" />
       </section>
       <div v-else class="settings-layout"><nav class="settings-nav"><button v-for="item in settingMenu" :key="item.key" :class="{ active: activeSetting === item.key }" @click="scrollToSetting(item.key)"><SettingsMenuIcon :name="item.key" />{{ item.label }}</button></nav><el-scrollbar class="settings-content"><section id="equity-account-setting" class="settings-section"><h3>账号信息</h3><div class="setting-row"><span>登录密码</span><el-button plain @click="openPasswordDialog">修改密码</el-button></div><div class="setting-row"><span>开机启动</span><el-switch v-model="autoLaunch" /></div></section><section id="equity-language-setting" class="settings-section"><h3>语言设置</h3><div class="setting-row"><span>显示语言</span><el-radio-group v-model="language" class="settings-radio-group"><el-radio class="settings-radio" value="简体中文">简体中文</el-radio><el-radio class="settings-radio" value="繁體中文">繁體中文</el-radio><el-radio class="settings-radio" value="English">English</el-radio></el-radio-group></div></section><section id="equity-trading-setting" class="settings-section"><h3>交易与行情设置</h3><div class="setting-row"><span>订单价格设置</span><el-radio-group v-model="orderPrice" class="settings-radio-group"><el-radio class="settings-radio" value="买一">买一</el-radio><el-radio class="settings-radio" value="卖一">卖一</el-radio><el-radio class="settings-radio" value="最新价">最新价</el-radio></el-radio-group></div><div class="setting-row"><span>涨跌幅颜色</span><el-radio-group v-model="colorRule" class="settings-radio-group"><el-radio class="settings-radio" value="red-up">红涨绿跌</el-radio><el-radio class="settings-radio" value="green-up">绿涨红跌</el-radio></el-radio-group></div><div class="price-preview" :class="pricePreviewClass"><span class="up">↑ 2.48%</span><span class="down">↓ 1.36%</span></div></section><section id="equity-appearance-setting" class="settings-section"><h3>系统外观</h3><div class="setting-row"><span>主题模式</span><el-radio-group v-model="theme" class="settings-radio-group"><el-radio class="settings-radio" value="dark">深色模式</el-radio><el-radio class="settings-radio" value="light">浅色模式</el-radio></el-radio-group></div><div class="theme-cards"><button :class="{ selected: theme === 'dark' }" @click="theme='dark'"><span class="mini-screen dark"><i /><b /><em /><em /><em /></span>深色模式</button><button :class="{ selected: theme === 'light' }" @click="theme='light'"><span class="mini-screen light"><i /><b /><em /><em /><em /></span>浅色模式</button></div></section></el-scrollbar></div>
-      <template #footer><div v-if="settingsDetail === 'password'" class="settings-footer"><el-button @click="closePasswordDialog">取消[Esc]</el-button><el-button type="primary" @click="confirmPasswordChange">确认修改[Enter]</el-button></div><div v-else class="settings-footer"><el-button @click="closeSettings">取消[Esc]</el-button><el-button type="primary" @click="saveSettings">保存设置[Enter]</el-button></div></template>
+      <template #footer><div v-if="settingsDetail === 'password'" class="settings-footer"><el-button @click="closePasswordDialog">取消[Esc]</el-button><el-button type="primary" @click="passwordChangeForm?.submit()">确认修改[Enter]</el-button></div><div v-else class="settings-footer"><el-button @click="closeSettings">取消[Esc]</el-button><el-button type="primary" @click="saveSettings">保存设置[Enter]</el-button></div></template>
     </BaseDialog>
   </TradingAppShell>
 </template>

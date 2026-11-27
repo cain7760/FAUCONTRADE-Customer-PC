@@ -1,5 +1,9 @@
 <script setup>
 import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import BaseDialog from '../../components/BaseDialog.vue'
+import DialogActions from '../../components/DialogActions.vue'
+import PasswordChangeForm from '../../components/auth/PasswordChangeForm.vue'
 import { View, Hide, User, Lock, ArrowDown } from '@element-plus/icons-vue'
 import { clearRememberedDemoAccounts, enterDemoSession, readLastRememberedDemoLogin, readRememberedDemoAccounts, readRememberedDemoCredentials, readRememberPassword } from '../../domain/auth/demoSession.js'
 import logoCityComposite from '../../assets/login/logo-city-composite-dim.png'
@@ -13,7 +17,8 @@ const lastLogin = readRememberPassword() ? readLastRememberedDemoLogin() : { use
 const values = ref({ ...lastLogin, rememberPassword: readRememberPassword() })
 const submitting = ref(false)
 const errorMessage = ref('')
-const resetHelpVisible = ref(false)
+const passwordResetVisible = ref(false)
+const passwordResetForm = ref(null)
 const passwordVisible = ref(false)
 const rememberedAccounts = ref(readRememberedDemoAccounts())
 const selectedAccount = ref(false)
@@ -40,6 +45,12 @@ function selectAccount(command) {
 function onUsernameInput() {
   values.value.password = ''
   selectedAccount.value = false
+}
+
+function finishPasswordReset() {
+  passwordResetVisible.value = false
+  values.value.password = ''
+  ElMessage.success('演示密码重置成功。')
 }
 
 async function submitLogin() {
@@ -139,9 +150,8 @@ async function submitLogin() {
 
             <div class="login-options">
               <el-checkbox v-model="values.rememberPassword">记住密码</el-checkbox>
-              <button type="button" class="login-reset-link" :aria-expanded="resetHelpVisible" aria-controls="login-reset-help" @click="resetHelpVisible = !resetHelpVisible">忘记密码？</button>
+              <button type="button" class="login-reset-link" aria-haspopup="dialog" @click="passwordResetVisible = true">忘记密码？</button>
             </div>
-            <p v-if="resetHelpVisible" id="login-reset-help" class="login-reset-help" role="status">请联系您的账户管理员重置密码。</p>
             <p v-if="errorMessage" class="login-submit-error" role="alert">{{ errorMessage }}</p>
             <el-button class="login-submit" type="primary" native-type="submit" :loading="submitting">{{ submitting ? '正在登录' : '登录' }}</el-button>
           </el-form>
@@ -149,6 +159,12 @@ async function submitLogin() {
         </div>
       </section>
     </div>
+    <BaseDialog v-model="passwordResetVisible" class="login-password-dialog" title="忘记密码" width="min(480px, calc(100% - 32px))" align-center append-to-body destroy-on-close>
+      <PasswordChangeForm v-if="passwordResetVisible" ref="passwordResetForm" recovery @success="finishPasswordReset" />
+      <template #footer>
+        <DialogActions cancel-text="取消[Esc]" confirm-text="确认重置[Enter]" @cancel="passwordResetVisible = false" @confirm="passwordResetForm?.submit()" />
+      </template>
+    </BaseDialog>
   </main>
 </template>
 
@@ -441,7 +457,6 @@ async function submitLogin() {
 .login-options :deep(.el-checkbox__inner) { width: 14px; height: 14px; }
 .login-reset-link { border: 0; padding: 0; min-height: 24px; background: transparent; color: var(--el-color-primary); font-size: 12px; }
 .login-reset-link:hover { color: var(--el-color-primary-light-3); }
-.login-reset-help { margin: 12px 0 0; font-size: 12px; line-height: 1.6; color: var(--el-text-color-regular); }
 .login-submit-error { margin: 12px 0 0; font-size: 12px; color: var(--el-color-danger); }
 .login-form .login-submit { width: 100%; height: 46px; margin: var(--login-space) 0 0; padding: 0 18px; border: 1px solid #d2aa5d; border-radius: 5px; background: linear-gradient(100deg, #b78b3d, #d3ad64); color: #fff; font-size: 14px; font-weight: 650; transition: filter .15s, transform .15s; --el-button-text-color: #fff; --el-button-hover-text-color: #fff; --el-button-active-text-color: #fff; }
 .login-form .login-submit:hover:not(.is-loading) { border-color: #d2aa5d; background: linear-gradient(100deg, #b78b3d, #d3ad64); color: #fff; filter: brightness(1.09); transform: translateY(-1px); }
@@ -467,6 +482,8 @@ async function submitLogin() {
 </style>
 
 <style>
+.login-password-dialog.el-dialog { padding: 0; }
+.login-password-dialog .el-dialog__body { padding: 20px 16px; }
 .login-account-popper.el-popper { --el-dropdown-menuItem-hover-fill: #30343a; --el-dropdown-menuItem-hover-color: #d3ad64; border: 1px solid #3a3e45; background: #24272c; }
 .login-account-popper .el-dropdown-menu { background: #24272c; }
 .login-account-popper .el-dropdown-menu__item { min-height: 32px; color: #cdd1d7; }
